@@ -1041,6 +1041,7 @@ h1{
       <button class="admin-tab" data-tab="calendar" onclick="switchTab('calendar')">🎵 Takvim</button>
       <button class="admin-tab" data-tab="social" onclick="switchTab('social')">🔗 Sosyal</button>
       <button class="admin-tab" data-tab="announcement" onclick="switchTab('announcement')">📢 Duyuru</button>
+      <button class="admin-tab" data-tab="settings" onclick="switchTab('settings')">⚙ Ayarlar</button>
     </div>
 
     <!-- Ürünler Tab -->
@@ -1166,6 +1167,27 @@ h1{
         </div>
         <div class="preview-box" id="announcementPreview" style="color:var(--gold);background:var(--announcement-bg);">
           ✦ Duyuru Önizleme ✦
+        </div>
+      </div>
+    </div>
+
+    <!-- Ayarlar Tab -->
+    <div class="admin-tab-content" id="tab-settings">
+      <div class="admin-panel">
+        <h3>🔐 Şifre</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">Admin panelinize giriş şifrenizi buradan değiştirebilirsiniz.</p>
+        <div class="admin-actions">
+          <button class="btn primary" onclick="changePassword()">🔑 Şifreyi Değiştir</button>
+        </div>
+      </div>
+
+      <div class="admin-panel" style="margin-top:14px;">
+        <h3>📱 Menü QR Kodu</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">Bu QR kodu yazdırıp masalara koyabilirsiniz. Müşteriler okuttuğunda doğrudan menüye ulaşır.</p>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+          <img id="menuQrCode" style="width:200px;height:200px;background:#fff;border-radius:12px;padding:10px;" alt="Menü QR Kodu">
+          <div id="menuUrlText" style="font-size:11px;color:var(--muted);word-break:break-all;text-align:center;"></div>
+          <button class="btn secondary" onclick="downloadQrCode()">⬇ QR Kodu İndir</button>
         </div>
       </div>
     </div>
@@ -2221,6 +2243,33 @@ function sendChat(){
  },550+Math.random()*450);
 }
 
+// ===== QR KOD =====
+function initQrCode(){
+  const img = document.getElementById('menuQrCode');
+  const urlText = document.getElementById('menuUrlText');
+  if(!img) return;
+  const menuUrl = window.location.href.split('#')[0];
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=' + encodeURIComponent(menuUrl);
+  img.src = qrUrl;
+  if(urlText) urlText.textContent = menuUrl;
+}
+
+async function downloadQrCode(){
+  const img = document.getElementById('menuQrCode');
+  if(!img || !img.src) return;
+  try{
+    const res = await fetch(img.src);
+    const blob = await res.blob();
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'kaptan-koksu-menu-qr.png';
+    link.click();
+    setTimeout(()=>URL.revokeObjectURL(link.href), 3000);
+  }catch(e){
+    window.open(img.src, '_blank');
+  }
+}
+
 // ===== YARDIMCI FONKSİYONLAR =====
 function escapeHtml(s){
  return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
@@ -2380,6 +2429,7 @@ document.addEventListener('DOMContentLoaded', function() {
   loadSocialLinks();
   renderCategoryManager();
   initCloudSync();
+  initQrCode();
   
   const searchInput = document.getElementById('productSearch');
   if (searchInput) {
