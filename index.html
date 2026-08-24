@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="theme-color" content="#0b0b0c">
 <title>Kaptan Köşkü | Kahve Deryası</title>
+<meta name="description" content="Kaptan Köşkü menüsü — kahvaltı, ana yemekler, ızgaralar, tatlılar ve daha fazlası.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Kaptan Köşkü | Kahve Deryası">
+<meta property="og:description" content="Kaptan Köşkü menüsüne göz atın — kahvaltı, ana yemekler, ızgaralar, tatlılar ve daha fazlası.">
+<meta property="og:image" content="https://api.qrserver.com/v1/create-qr-code/?size=400x400&bgcolor=0b0b0c&color=d7ad5b&data=Kaptan%20K%C3%B6%C5%9Fk%C3%BC">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Kaptan Köşkü | Kahve Deryası">
+<meta name="twitter:description" content="Kaptan Köşkü menüsüne göz atın.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%230b0b0c' stroke='%23d7ad5b' stroke-width='4'/%3E%3Ctext x='50' y='68' font-size='52' font-family='Georgia,serif' font-weight='700' fill='%23f1cf82' text-anchor='middle'%3EK%3C/text%3E%3C/svg%3E">
 <style>
 :root{
   --bg:#0b0b0c; --card:#151517; --card2:#1c1c1f; --text:#f5f5f2;
@@ -513,7 +522,16 @@ h1{
 .menu-product img{width:60px;height:60px;border-radius:10px;object-fit:cover;background:#222}
 .menu-product.no-image img{display:none}
 .menu-product-body{flex:1}.menu-product-body strong{font-size:14px}.menu-product-body p{margin:3px 0 0;color:var(--muted);font-size:11px;line-height:1.3}
-.menu-product-price{color:var(--gold2);font-weight:800;white-space:nowrap}
+.menu-product-price{color:var(--gold2);font-weight:800;white-space:nowrap;text-align:right}
+.price-old{color:var(--muted);font-weight:400;text-decoration:line-through;font-size:11px}
+.price-new{color:#7fd88a;font-weight:800}
+.product-badge{font-size:9px;padding:2px 7px;border-radius:999px;white-space:nowrap;font-weight:700}
+.badge-star{background:rgba(215,173,91,.18);color:var(--gold2);border:1px solid rgba(215,173,91,.4)}
+.badge-fire{background:rgba(255,107,53,.15);color:#ff8a5b;border:1px solid rgba(255,107,53,.35)}
+.product-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.product-tag-chip{font-size:9px;padding:2px 7px;border-radius:999px;background:var(--card2);color:var(--muted);border:1px solid var(--line)}
+.fav-btn{transition:transform .15s}
+.fav-btn:active{transform:scale(1.2)}
 .empty-products{color:var(--muted);font-size:12px;padding:10px 0}
 .footer{text-align:center;color:#666;font-size:10px;margin-top:30px}
 @media(max-width:480px){.grid{gap:8px}.category{min-height:100px;padding:12px}.container{padding-left:12px;padding-right:12px}}
@@ -588,6 +606,12 @@ h1{
 .field input,.field select,.field textarea{width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);outline:none;font-size:13px;transition:border .2s}
 .field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(215,173,91,.6)}
 .field textarea{min-height:60px;resize:vertical}
+.tag-chip-group{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+@media(min-width:520px){.tag-chip-group{grid-template-columns:repeat(3,1fr)}}
+.tag-chip{display:flex;align-items:center;gap:6px;padding:9px 12px;border-radius:10px;border:1px solid var(--line);background:#0e0e0f;color:var(--muted);font-size:12.5px;font-weight:400;text-transform:none;letter-spacing:0;cursor:pointer;transition:.15s;user-select:none}
+.tag-chip input{margin:0;accent-color:var(--gold);flex-shrink:0}
+.tag-chip.active{border-color:var(--gold);color:var(--gold);background:rgba(215,173,91,.08)}
+.tag-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .admin-actions{display:flex;gap:6px;margin-top:12px;flex-wrap:wrap}
 .admin-actions .btn{padding:10px 16px;font-size:13px;width:auto}
 .admin-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;margin-bottom:18px}
@@ -1066,14 +1090,58 @@ h1{
             <input id="productPrice" type="number" min="0" step="0.01" placeholder="250">
           </div>
           <div class="field">
+            <label>İndirimli Fiyat (₺, isteğe bağlı)</label>
+            <input id="productDiscountPrice" type="number" min="0" step="0.01" placeholder="Boş bırakılırsa indirim yok">
+          </div>
+          <div class="field">
             <label>Fotoğraf (isteğe bağlı)</label>
             <input id="productImage" type="file" accept="image/*">
+          </div>
+          <div class="field">
+            <label>Rozet</label>
+            <select id="productBadge">
+              <option value="">Yok</option>
+              <option value="star">⭐ Tavsiye Edilen</option>
+              <option value="fire">🔥 Çok Satan</option>
+            </select>
+          </div>
+          <div class="field full">
+            <label>Etiketler</label>
+            <div class="tag-chip-group">
+              <label class="tag-chip"><input type="checkbox" value="Glutensiz" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🌾 Glutensiz</span></label>
+              <label class="tag-chip"><input type="checkbox" value="Vejetaryen" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🥦 Vejetaryen</span></label>
+              <label class="tag-chip"><input type="checkbox" value="Vegan" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🌱 Vegan</span></label>
+              <label class="tag-chip"><input type="checkbox" value="Acılı" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🌶️ Acılı</span></label>
+              <label class="tag-chip"><input type="checkbox" value="Süt İçerir" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🥛 Süt İçerir</span></label>
+              <label class="tag-chip"><input type="checkbox" value="Fındık İçerir" class="productTag" onchange="this.closest('.tag-chip').classList.toggle('active',this.checked)"><span>🥜 Fındık İçerir</span></label>
+            </div>
           </div>
         </div>
         <div class="admin-actions">
           <button class="btn primary" id="saveProductBtn" onclick="saveProduct()">+ Ürün Ekle</button>
           <button class="btn secondary" onclick="clearProductForm()">Temizle</button>
           <button class="btn secondary" onclick="loadExampleProducts()">📂 Örnek Ürünler Yükle</button>
+        </div>
+      </div>
+
+      <!-- Toplu Fiyat Güncelleme -->
+      <div class="admin-panel" style="margin-top:14px;">
+        <h3 style="font-size:16px;">💰 Toplu Fiyat Güncelleme</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">Seçtiğiniz kategorideki (veya tüm ürünlerdeki) fiyatları tek seferde yüzde olarak artırın/azaltın.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label>Kategori</label>
+            <select id="bulkPriceCategory">
+              <option value="all">📂 Tüm Kategoriler</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Yüzde (%) — artış için pozitif, indirim için negatif</label>
+            <input id="bulkPricePercent" type="number" step="0.1" placeholder="Örn. 10 (yüzde 10 zam) veya -10 (yüzde 10 indirim)">
+          </div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn primary" onclick="bulkUpdatePrices()">💰 Fiyatları Güncelle</button>
         </div>
       </div>
 
@@ -1136,6 +1204,10 @@ h1{
           <div class="social-label">🌐 Google</div>
           <input type="text" id="googleUrl" placeholder="https://g.page/hesabınız" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:12px;outline:none;width:100%;">
         </div>
+        <div class="social-row">
+          <div class="social-label">💬 WhatsApp Numarası</div>
+          <input type="text" id="whatsappNumber" placeholder="905XXXXXXXXX (başında 90 ile, boşluksuz)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:12px;outline:none;width:100%;">
+        </div>
         <div class="admin-actions" style="margin-top:10px;">
           <button class="btn primary" onclick="saveSocialLinks()">💾 Linkleri Kaydet</button>
           <button class="btn secondary" onclick="resetSocialLinks()">↺ Varsayılana Dön</button>
@@ -1169,6 +1241,33 @@ h1{
           ✦ Duyuru Önizleme ✦
         </div>
       </div>
+
+      <div class="admin-panel" style="margin-top:14px;">
+        <h3>⏰ Zamanlı Duyurular (Saatli Uyarılar)</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">Belirlediğiniz saat aralığında menüyü açan müşterilere otomatik bir uyarı penceresi gösterilir. Örn. 10:00–12:00 arası "Öğlen kampanyamız var" gibi.</p>
+        <div class="form-grid">
+          <div class="field">
+            <label>Başlangıç Saati</label>
+            <input type="time" id="timedAnnStart" value="10:00">
+          </div>
+          <div class="field">
+            <label>Bitiş Saati</label>
+            <input type="time" id="timedAnnEnd" value="12:00">
+          </div>
+          <div class="field full">
+            <label>Duyuru Metni</label>
+            <textarea id="timedAnnText" placeholder="Örn. İyi öğlenler! Pastalarımızda %20 indirim fırsatını kaçırmayın."></textarea>
+          </div>
+          <div class="field">
+            <label>Emoji (isteğe bağlı)</label>
+            <input type="text" id="timedAnnEmoji" placeholder="📢" maxlength="4">
+          </div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn primary" onclick="addTimedAnnouncement()">+ Zamanlı Duyuru Ekle</button>
+        </div>
+        <div id="timedAnnouncementList" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
     </div>
 
     <!-- Ayarlar Tab -->
@@ -1190,6 +1289,14 @@ h1{
           <button class="btn secondary" onclick="downloadQrCode()">⬇ QR Kodu İndir</button>
         </div>
       </div>
+      <div class="admin-panel" style="margin-top:14px;">
+        <h3>📊 Ziyaret İstatistiği</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">Menünüzün açılma sayısı (tüm cihazlar toplamı).</p>
+        <div class="stat-card">
+          <span class="num" id="statViewCount">—</span>
+          <span class="label">Toplam Görüntülenme</span>
+        </div>
+      </div>
     </div>
 
     <div class="admin-footer">Kaptan Köşkü • Yönetim Paneli</div>
@@ -1200,15 +1307,37 @@ h1{
 <div id="modal" class="modal" onclick="if(event.target===this)closeModal()">
   <div class="modal-card">
     <div class="modal-head"><h3 id="modalTitle"></h3><button class="close" onclick="closeModal()">×</button></div>
+    <div style="margin:8px 0 4px;">
+      <select id="modalSort" onchange="changeSort(this.value)" style="padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:12px;outline:none;">
+        <option value="default">Sıralama: Varsayılan</option>
+        <option value="price-asc">Fiyat: Düşükten Yükseğe</option>
+        <option value="price-desc">Fiyat: Yüksekten Düşüğe</option>
+      </select>
+    </div>
     <div id="modalProducts" class="category-products"></div>
   </div>
 </div>
+
+<!-- Zamanlı Duyuru Popup -->
+<div id="timedAnnouncementModal" class="modal" style="display:none;" onclick="if(event.target===this)closeTimedAnnouncement()">
+  <div class="modal-card" style="max-width:380px;text-align:center;padding:28px 22px;">
+    <div style="font-size:34px;margin-bottom:10px;" id="timedAnnouncementEmoji">📢</div>
+    <div id="timedAnnouncementText" style="font-size:15px;line-height:1.6;color:var(--text);margin-bottom:18px;"></div>
+    <button class="btn primary" onclick="closeTimedAnnouncement()" style="width:auto;padding:10px 28px;">Tamam</button>
+  </div>
+</div>
+
+<!-- WhatsApp Yüzen Buton -->
+<a id="whatsappFloatBtn" href="#" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp'tan ulaşın"
+   style="display:none;position:fixed;bottom:20px;right:18px;width:54px;height:54px;background:#25D366;
+          border-radius:50%;align-items:center;justify-content:center;box-shadow:0 6px 18px rgba(0,0,0,.45);
+          z-index:600;font-size:26px;text-decoration:none;line-height:1;">💬</a>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
   import {
     getFirestore, doc, getDoc, setDoc, deleteDoc,
-    collection, getDocs, onSnapshot, writeBatch
+    collection, getDocs, onSnapshot, writeBatch, increment
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1223,7 +1352,7 @@ h1{
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch };
+  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment };
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script>
@@ -1350,7 +1479,8 @@ const SOCIAL_KEY = "kaptanKoskuSocialLinks";
 function getDefaultSocialLinks(){
   return {
     instagram: "https://instagram.com/kaptankosku",
-    google: "https://g.page/kaptankosku"
+    google: "https://g.page/kaptankosku",
+    whatsapp: ""
   };
 }
 
@@ -1375,25 +1505,40 @@ function loadSocialLinks(){
   const data = getSocialLinks();
   const instagramInput = document.getElementById('instagramUrl');
   const googleInput = document.getElementById('googleUrl');
+  const whatsappInput = document.getElementById('whatsappNumber');
   const instagramLink = document.getElementById('instagramLink');
   const googleLink = document.getElementById('googleLink');
   
   if(instagramInput) instagramInput.value = data.instagram;
   if(googleInput) googleInput.value = data.google;
+  if(whatsappInput) whatsappInput.value = data.whatsapp || '';
   if(instagramLink) instagramLink.href = data.instagram;
   if(googleLink) googleLink.href = data.google;
+  updateWhatsappButton(data.whatsapp);
+}
+
+function updateWhatsappButton(number){
+  const btn = document.getElementById('whatsappFloatBtn');
+  if(!btn) return;
+  if(number && number.trim()){
+    btn.style.display = 'flex';
+    btn.href = 'https://wa.me/' + number.trim().replace(/[^0-9]/g,'') + '?text=' + encodeURIComponent('Merhaba, Kaptan Köşkü menüsünden size ulaşıyorum.');
+  }else{
+    btn.style.display = 'none';
+  }
 }
 
 function saveSocialLinks(){
   const instagram = document.getElementById('instagramUrl').value.trim();
   const google = document.getElementById('googleUrl').value.trim();
+  const whatsapp = document.getElementById('whatsappNumber').value.trim();
   
   if(!instagram || !google){
     alert('Lütfen her iki linki de girin.');
     return;
   }
   
-  const data = { instagram, google };
+  const data = { instagram, google, whatsapp };
   saveSocialLinksData(data);
   loadSocialLinks();
   alert('✅ Sosyal medya linkleri başarıyla güncellendi!');
@@ -1664,6 +1809,121 @@ function resetAnnouncement(){
   alert('↺ Duyuru varsayılan ayarlara döndürüldü.');
 }
 
+// ===== ZAMANLI DUYURULAR (Saatli Uyarılar) =====
+const TIMED_ANN_KEY = "kaptanKoskuTimedAnnouncements";
+
+function getTimedAnnouncements(){
+  try{
+    return JSON.parse(localStorage.getItem(TIMED_ANN_KEY) || '[]');
+  }catch(e){ return []; }
+}
+
+function saveTimedAnnouncementsData(list){
+  localStorage.setItem(TIMED_ANN_KEY, JSON.stringify(list));
+  cloudSet('settings', 'timedAnnouncements', { list });
+}
+
+function renderTimedAnnouncementList(){
+  const container = document.getElementById('timedAnnouncementList');
+  if(!container) return;
+  const list = getTimedAnnouncements();
+  if(!list.length){
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;">Henüz zamanlı duyuru eklenmedi.</div>';
+    return;
+  }
+  container.innerHTML = list.map(item => `
+    <div class="product-row" style="align-items:center;">
+      <div class="product-info">
+        <strong>${item.emoji || '📢'} ${escapeHtml(item.start)} – ${escapeHtml(item.end)}</strong>
+        <small>${escapeHtml(item.text)}</small>
+      </div>
+      <div class="row-buttons">
+        <button onclick="toggleTimedAnnouncement('${item.id}')" title="${item.active ? 'Pasif yap' : 'Aktif yap'}">${item.active ? '✅' : '⏸'}</button>
+        <button onclick="deleteTimedAnnouncement('${item.id}')">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addTimedAnnouncement(){
+  const start = document.getElementById('timedAnnStart').value;
+  const end = document.getElementById('timedAnnEnd').value;
+  const text = document.getElementById('timedAnnText').value.trim();
+  const emoji = document.getElementById('timedAnnEmoji').value.trim() || '📢';
+
+  if(!start || !end){
+    alert('Lütfen başlangıç ve bitiş saatini seçin.');
+    return;
+  }
+  if(!text){
+    alert('Lütfen duyuru metnini girin.');
+    return;
+  }
+
+  const list = getTimedAnnouncements();
+  list.push({ id: Date.now().toString(), start, end, text, emoji, active: true });
+  saveTimedAnnouncementsData(list);
+  renderTimedAnnouncementList();
+
+  document.getElementById('timedAnnText').value = '';
+  document.getElementById('timedAnnEmoji').value = '';
+  alert('✅ Zamanlı duyuru eklendi.');
+}
+
+function toggleTimedAnnouncement(id){
+  const list = getTimedAnnouncements();
+  const item = list.find(x=>x.id===id);
+  if(item) item.active = !item.active;
+  saveTimedAnnouncementsData(list);
+  renderTimedAnnouncementList();
+}
+
+function deleteTimedAnnouncement(id){
+  if(!confirm('Bu zamanlı duyuruyu silmek istediğinize emin misiniz?')) return;
+  const list = getTimedAnnouncements().filter(x=>x.id!==id);
+  saveTimedAnnouncementsData(list);
+  renderTimedAnnouncementList();
+}
+
+// Şu anki saatin (HH:MM) verilen aralıkta olup olmadığını kontrol eder.
+// Gece yarısını geçen aralıkları da destekler (örn. 22:00 - 02:00)
+function isTimeInRange(nowHM, start, end){
+  if(start <= end){
+    return nowHM >= start && nowHM <= end;
+  }else{
+    return nowHM >= start || nowHM <= end;
+  }
+}
+
+function checkTimedAnnouncements(){
+  const list = getTimedAnnouncements().filter(x=>x.active);
+  if(!list.length) return;
+
+  const now = new Date();
+  const nowHM = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+  const todayKey = now.toISOString().slice(0,10);
+
+  let shown;
+  try{ shown = JSON.parse(sessionStorage.getItem('kaptanKoskuShownAnnouncements')||'{}'); }catch(e){ shown = {}; }
+
+  const match = list.find(item => isTimeInRange(nowHM, item.start, item.end) && shown[todayKey+'_'+item.id] !== true);
+  if(match){
+    shown[todayKey+'_'+match.id] = true;
+    sessionStorage.setItem('kaptanKoskuShownAnnouncements', JSON.stringify(shown));
+    showTimedAnnouncement(match.text, match.emoji);
+  }
+}
+
+function showTimedAnnouncement(text, emoji){
+  document.getElementById('timedAnnouncementText').textContent = text;
+  document.getElementById('timedAnnouncementEmoji').textContent = emoji || '📢';
+  document.getElementById('timedAnnouncementModal').style.display = 'flex';
+}
+
+function closeTimedAnnouncement(){
+  document.getElementById('timedAnnouncementModal').style.display = 'none';
+}
+
 // ===== ŞİFRE YÖNETİMİ =====
 const ADMIN_PASSWORD_KEY = "kaptanKoskuAdminPasswordHash";
 const ADMIN_ATTEMPTS_KEY = "kaptanKoskuAdminAttempts";
@@ -1726,6 +1986,8 @@ async function checkAdminPassword(){
     document.getElementById('admin').style.display = 'block';
     document.getElementById('home').style.display = 'none';
     document.getElementById('menu').style.display = 'none';
+    const wBtn = document.getElementById('whatsappFloatBtn');
+    if(wBtn) wBtn.style.display='none';
     populateCategories();
     renderAdmin();
     updateStats();
@@ -1797,6 +2059,7 @@ function openHome(){
   renderCalendar();
   loadSocialLinks();
   loginSource = null;
+  checkTimedAnnouncements();
 }
 
 function openMenu(scrollToAssistant){
@@ -1807,6 +2070,7 @@ function openMenu(scrollToAssistant){
   document.body.style.background='var(--bg)';
   renderCategories();
   loadAnnouncement();
+  updateWhatsappButton(getSocialLinks().whatsapp);
   if(scrollToAssistant){
     setTimeout(()=>{
       document.getElementById('assistant').scrollIntoView({behavior:'smooth',block:'start'});
@@ -1817,6 +2081,8 @@ function openMenu(scrollToAssistant){
 }
 
 function openAdmin(){
+  const wBtn = document.getElementById('whatsappFloatBtn');
+  if(wBtn) wBtn.style.display='none';
   if(isAdminLoggedIn){
     document.getElementById('home').style.display='none';
     document.getElementById('menu').style.display='none';
@@ -1900,30 +2166,87 @@ function populateCategoryDropdowns(){
       }
     }
   });
+  const bulkSelect = document.getElementById('bulkPriceCategory');
+  if(bulkSelect){
+    const currentValue = bulkSelect.value;
+    bulkSelect.innerHTML = '<option value="all">📂 Tüm Kategoriler</option>' +
+      categories.map(c => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    if(currentValue) bulkSelect.value = currentValue;
+  }
 }
 
 // ===== MODAL =====
+// ===== FAVORİLER (cihaza özel) =====
+function getFavorites(){
+  try{ return JSON.parse(localStorage.getItem('kaptanKoskuFavorites')||'[]'); }catch(e){ return []; }
+}
+function isFavorite(id){ return getFavorites().includes(id); }
+function toggleFavorite(id){
+  let favs = getFavorites();
+  if(favs.includes(id)) favs = favs.filter(x=>x!==id);
+  else favs.push(id);
+  localStorage.setItem('kaptanKoskuFavorites', JSON.stringify(favs));
+  if(currentModalCategory) showCategory(currentModalCategory);
+}
+
+// ===== SIRALAMA =====
+let currentModalCategory = null;
+let currentSort = 'default';
+function changeSort(value){
+  currentSort = value;
+  if(currentModalCategory) showCategory(currentModalCategory);
+}
+function sortProductList(items){
+  const sorted = [...items];
+  if(currentSort==='price-asc') sorted.sort((a,b)=>(Number(a.discountPrice||a.price))-(Number(b.discountPrice||b.price)));
+  else if(currentSort==='price-desc') sorted.sort((a,b)=>(Number(b.discountPrice||b.price))-(Number(a.discountPrice||a.price)));
+  else sorted.sort((a,b)=>(a.order||0)-(b.order||0));
+  return sorted;
+}
+
+function renderProductCard(p){
+  const badgeHtml = p.badge==='star' ? '<span class="product-badge badge-star">⭐ Tavsiye Edilen</span>'
+    : p.badge==='fire' ? '<span class="product-badge badge-fire">🔥 Çok Satan</span>' : '';
+  const tagsHtml = (p.tags&&p.tags.length) ? `<div class="product-tags">${p.tags.map(t=>`<span class="product-tag-chip">${escapeHtml(t)}</span>`).join('')}</div>` : '';
+  const hasDiscount = p.discountPrice && Number(p.discountPrice) > 0 && Number(p.discountPrice) < Number(p.price);
+  const priceHtml = hasDiscount
+    ? `<div class="menu-product-price"><span class="price-old">${Number(p.price).toFixed(2).replace('.',',')} ₺</span><br><span class="price-new">${Number(p.discountPrice).toFixed(2).replace('.',',')} ₺</span></div>`
+    : `<div class="menu-product-price">${Number(p.price).toFixed(2).replace('.',',')} ₺</div>`;
+  const fav = isFavorite(p.id);
+  return `
+    <div class="menu-product ${p.image?'':'no-image'}">
+      ${p.image?`<img src="${p.image}" alt="">`:'<img alt="">'}
+      <div class="menu-product-body">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <strong>${escapeHtml(p.name)}</strong>
+          ${badgeHtml}
+        </div>
+        ${p.desc?`<p>${escapeHtml(p.desc)}</p>`:''}
+        ${tagsHtml}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+        ${priceHtml}
+        <button class="fav-btn" onclick="toggleFavorite('${p.id}')" aria-label="Favori" style="background:none;border:0;font-size:16px;cursor:pointer;padding:2px;">${fav?'❤️':'🤍'}</button>
+      </div>
+    </div>
+  `;
+}
+
 function showCategory(name){
+  currentModalCategory = name;
   document.getElementById('modalTitle').textContent=name;
   document.getElementById('modal').style.display='flex';
+  const sortSelect = document.getElementById('modalSort');
+  if(sortSelect) sortSelect.value = currentSort;
   const list=document.getElementById('modalProducts');
-  const items=products.filter(p=>p.category===name);
+  const items=sortProductList(products.filter(p=>p.category===name));
   if(!items.length){
     list.innerHTML='<div class="empty-products">Bu kategoride henüz ürün bulunmuyor.</div>';
     return;
   }
-  list.innerHTML=items.map(p=>`
-    <div class="menu-product ${p.image?'':'no-image'}">
-      ${p.image?`<img src="${p.image}" alt="">`:'<img alt="">'}
-      <div class="menu-product-body">
-        <strong>${escapeHtml(p.name)}</strong>
-        ${p.desc?`<p>${escapeHtml(p.desc)}</p>`:''}
-      </div>
-      <div class="menu-product-price">${Number(p.price).toFixed(2).replace('.',',')} ₺</div>
-    </div>
-  `).join('');
+  list.innerHTML=items.map(renderProductCard).join('');
 }
-function closeModal(){ document.getElementById('modal').style.display='none'; }
+function closeModal(){ document.getElementById('modal').style.display='none'; currentModalCategory=null; }
 
 // ===== ÜRÜN YÖNETİMİ =====
 let products = JSON.parse(localStorage.getItem("kaptanKoskuProducts") || "[]");
@@ -1949,7 +2272,10 @@ function clearProductForm(){
   document.getElementById('productName').value='';
   document.getElementById('productDesc').value='';
   document.getElementById('productPrice').value='';
+  document.getElementById('productDiscountPrice').value='';
   document.getElementById('productImage').value='';
+  document.getElementById('productBadge').value='';
+  document.querySelectorAll('.productTag').forEach(cb=>{cb.checked=false; cb.closest('.tag-chip').classList.remove('active');});
   document.getElementById('saveProductBtn').textContent='+ Ürün Ekle';
   document.getElementById('formTitle').textContent='+ Yeni Ürün Ekle';
 }
@@ -1959,21 +2285,25 @@ function saveProduct(){
   const name=document.getElementById('productName').value.trim();
   const desc=document.getElementById('productDesc').value.trim();
   const price=document.getElementById('productPrice').value;
+  const discountPrice=document.getElementById('productDiscountPrice').value;
+  const badge=document.getElementById('productBadge').value;
+  const tags=Array.from(document.querySelectorAll('.productTag:checked')).map(cb=>cb.value);
   const file=document.getElementById('productImage').files[0];
 
   if(!name || price===''){ alert('Lütfen ürün adı ve fiyat girin.'); return; }
+  if(discountPrice!=='' && Number(discountPrice)>=Number(price)){ alert('İndirimli fiyat, normal fiyattan düşük olmalı.'); return; }
 
   const finish=(image)=>{
     let savedProduct;
     if(editingId){
       const p=products.find(x=>x.id===editingId);
-      if(p){p.category=category;p.name=name;p.desc=desc;p.price=price;if(image!==null)p.image=image;savedProduct=p;}
+      if(p){p.category=category;p.name=name;p.desc=desc;p.price=price;p.discountPrice=discountPrice||'';p.badge=badge;p.tags=tags;if(image!==null)p.image=image;savedProduct=p;}
     }else{
-      savedProduct={id:Date.now().toString(),category,name,desc,price,image:image||''};
+      savedProduct={id:Date.now().toString(),category,name,desc,price,discountPrice:discountPrice||'',badge,tags,order:products.length,image:image||''};
       products.push(savedProduct);
     }
     saveProducts(); clearProductForm(); renderAdmin(); updateStats();
-    if(savedProduct) cloudSet('products', savedProduct.id, {category:savedProduct.category,name:savedProduct.name,desc:savedProduct.desc,price:savedProduct.price,image:savedProduct.image});
+    if(savedProduct) cloudSet('products', savedProduct.id, {category:savedProduct.category,name:savedProduct.name,desc:savedProduct.desc,price:savedProduct.price,discountPrice:savedProduct.discountPrice||'',badge:savedProduct.badge||'',tags:savedProduct.tags||[],order:savedProduct.order||0,image:savedProduct.image});
     alert(editingId ? 'Ürün güncellendi.' : 'Ürün eklendi.');
   };
   if(file){
@@ -2039,12 +2369,31 @@ function filterProducts() {
         </div>
         <div class="product-price">${Number(p.price).toFixed(2).replace('.',',')} ₺</div>
         <div class="row-buttons">
+          <button onclick="moveProduct('${p.id}',-1)" title="Yukarı taşı">↑</button>
+          <button onclick="moveProduct('${p.id}',1)" title="Aşağı taşı">↓</button>
           <button onclick="editProduct('${p.id}')">✎</button>
           <button onclick="deleteProduct('${p.id}')">✕</button>
         </div>
       </div>
     `;
   }).join('');
+}
+
+function moveProduct(id, direction){
+  const p = products.find(x=>x.id===id);
+  if(!p) return;
+  const sameCategory = products.filter(x=>x.category===p.category).sort((a,b)=>(a.order||0)-(b.order||0));
+  const idx = sameCategory.findIndex(x=>x.id===id);
+  const swapIdx = idx + direction;
+  if(swapIdx < 0 || swapIdx >= sameCategory.length) return;
+  const other = sameCategory[swapIdx];
+  const tmp = p.order || 0;
+  p.order = other.order || 0;
+  other.order = tmp;
+  saveProducts();
+  filterProducts();
+  cloudSet('products', p.id, {category:p.category,name:p.name,desc:p.desc,price:p.price,discountPrice:p.discountPrice||'',badge:p.badge||'',tags:p.tags||[],order:p.order||0,image:p.image});
+  cloudSet('products', other.id, {category:other.category,name:other.name,desc:other.desc,price:other.price,discountPrice:other.discountPrice||'',badge:other.badge||'',tags:other.tags||[],order:other.order||0,image:other.image});
 }
 
 function updateCategoryFilter() {
@@ -2080,7 +2429,14 @@ function editProduct(id){
   document.getElementById('productName').value=p.name;
   document.getElementById('productDesc').value=p.desc||'';
   document.getElementById('productPrice').value=p.price;
+  document.getElementById('productDiscountPrice').value=p.discountPrice||'';
   document.getElementById('productImage').value='';
+  document.getElementById('productBadge').value=p.badge||'';
+  document.querySelectorAll('.productTag').forEach(cb=>{
+    const checked=(p.tags||[]).includes(cb.value);
+    cb.checked=checked;
+    cb.closest('.tag-chip').classList.toggle('active',checked);
+  });
   document.getElementById('saveProductBtn').textContent='✓ Güncelle';
   document.getElementById('formTitle').textContent='✎ Ürünü Düzenle';
   document.querySelector('.admin-container').scrollIntoView({behavior:'smooth'});
@@ -2094,6 +2450,39 @@ function deleteProduct(id){
     saveProducts(); renderAdmin(); updateStats();
     cloudDelete('products', id);
   }
+}
+
+// ===== TOPLU FİYAT GÜNCELLEME =====
+function bulkUpdatePrices(){
+  const category = document.getElementById('bulkPriceCategory').value;
+  const percentInput = document.getElementById('bulkPricePercent').value;
+  const percent = parseFloat(percentInput);
+  if(isNaN(percent) || percent===0){
+    alert('Lütfen geçerli bir yüzde girin (örn. 10 veya -10).');
+    return;
+  }
+  const targets = category==='all' ? products : products.filter(p=>p.category===category);
+  if(!targets.length){
+    alert('Bu kategoride ürün bulunamadı.');
+    return;
+  }
+  const label = category==='all' ? 'tüm ürünlerin' : `"${category}" kategorisindeki ürünlerin`;
+  if(!confirm(`${label} fiyatları %${percent} oranında güncellenecek. Onaylıyor musunuz?`)) return;
+
+  targets.forEach(p=>{
+    const newPrice = Math.max(0, Number(p.price) * (1 + percent/100));
+    p.price = newPrice.toFixed(2);
+    if(p.discountPrice){
+      const newDiscount = Math.max(0, Number(p.discountPrice) * (1 + percent/100));
+      p.discountPrice = newDiscount.toFixed(2);
+    }
+    cloudSet('products', p.id, {category:p.category,name:p.name,desc:p.desc,price:p.price,discountPrice:p.discountPrice||'',badge:p.badge||'',tags:p.tags||[],order:p.order||0,image:p.image});
+  });
+  saveProducts();
+  renderAdmin();
+  updateStats();
+  document.getElementById('bulkPricePercent').value='';
+  alert(`✅ ${targets.length} ürünün fiyatı güncellendi.`);
 }
 
 function updateStats(){
@@ -2318,7 +2707,7 @@ async function cloudReplaceAllProducts(newProducts){
     const batch = writeBatch(db);
     snap.forEach(d=>batch.delete(d.ref));
     newProducts.forEach(p=>{
-      batch.set(doc(db,'products',p.id), {category:p.category,name:p.name,desc:p.desc,price:p.price,image:p.image||''});
+      batch.set(doc(db,'products',p.id), {category:p.category,name:p.name,desc:p.desc,price:p.price,discountPrice:p.discountPrice||'',badge:p.badge||'',tags:p.tags||[],order:p.order||0,image:p.image||''});
     });
     await batch.commit();
   }catch(e){
@@ -2338,7 +2727,7 @@ async function initCloudSync(){
     console.warn('Bulut bağlantısı kurulamadı, cihaz içi (localStorage) modda devam ediliyor.');
     return;
   }
-  const {db, doc, getDoc, setDoc, collection, onSnapshot, writeBatch} = window.__fb;
+  const {db, doc, getDoc, setDoc, collection, onSnapshot, writeBatch, increment} = window.__fb;
 
   try{
     const metaRef = doc(db,'settings','meta');
@@ -2349,7 +2738,7 @@ async function initCloudSync(){
       const localProducts = JSON.parse(localStorage.getItem('kaptanKoskuProducts') || '[]');
       localProducts.forEach(p=>{
         batch.set(doc(db,'products',String(p.id)), {
-          category:p.category||'', name:p.name||'', desc:p.desc||'', price:String(p.price||''), image:p.image||''
+          category:p.category||'', name:p.name||'', desc:p.desc||'', price:String(p.price||''), discountPrice:p.discountPrice||'', badge:p.badge||'', tags:p.tags||[], order:p.order||0, image:p.image||''
         });
       });
       batch.set(doc(db,'settings','categories'), { list: getCategories() });
@@ -2357,6 +2746,7 @@ async function initCloudSync(){
       batch.set(doc(db,'settings','social'), getSocialLinks());
       batch.set(doc(db,'settings','calendar'), getCalendarData());
       batch.set(doc(db,'settings','auth'), { passwordHash: await getAdminPasswordHash() });
+      batch.set(doc(db,'settings','timedAnnouncements'), { list: getTimedAnnouncements() });
       batch.set(metaRef, { migrated:true, migratedAt: Date.now() });
       await batch.commit();
     }
@@ -2416,6 +2806,30 @@ async function initCloudSync(){
     const hash = snap.data().passwordHash;
     if(hash) localStorage.setItem(ADMIN_PASSWORD_KEY, hash);
   }, err=>console.warn('Şifre senkronizasyon hatası:', err));
+
+  onSnapshot(doc(db,'settings','timedAnnouncements'), snap=>{
+    if(!snap.exists()) return;
+    const data = snap.data().list;
+    if(Array.isArray(data)){
+      localStorage.setItem(TIMED_ANN_KEY, JSON.stringify(data));
+      renderTimedAnnouncementList();
+      if(document.getElementById('home') && document.getElementById('home').style.display!=='none'){
+        checkTimedAnnouncements();
+      }
+    }
+  }, err=>console.warn('Zamanlı duyuru senkronizasyon hatası:', err));
+
+  onSnapshot(doc(db,'settings','stats'), snap=>{
+    const el = document.getElementById('statViewCount');
+    if(el) el.textContent = snap.exists() ? (snap.data().viewCount || 0) : 0;
+  }, err=>console.warn('İstatistik senkronizasyon hatası:', err));
+
+  // Bu sayfa yüklemesini bir görüntülenme olarak say (oturum başına bir kez)
+  if(!sessionStorage.getItem('kaptanKoskuViewCounted')){
+    sessionStorage.setItem('kaptanKoskuViewCounted', '1');
+    setDoc(doc(db,'settings','stats'), { viewCount: increment(1) }, { merge: true })
+      .catch(e=>console.warn('Görüntülenme sayısı güncellenemedi:', e));
+  }
 }
 
 // ===== BAŞLATMA =====
@@ -2428,8 +2842,10 @@ document.addEventListener('DOMContentLoaded', function() {
   loadAnnouncement();
   loadSocialLinks();
   renderCategoryManager();
+  renderTimedAnnouncementList();
   initCloudSync();
   initQrCode();
+  checkTimedAnnouncements();
   
   const searchInput = document.getElementById('productSearch');
   if (searchInput) {
