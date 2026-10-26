@@ -14,6 +14,14 @@
 <meta name="twitter:title" content="Kaptan Köşkü | Kahve Deryası">
 <meta name="twitter:description" content="Kaptan Köşkü menüsüne göz atın.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%230b0b0c' stroke='%23d7ad5b' stroke-width='4'/%3E%3Ctext x='50' y='68' font-size='52' font-family='Georgia,serif' font-weight='700' fill='%23f1cf82' text-anchor='middle'%3EK%3C/text%3E%3C/svg%3E">
+
+<!-- PWA: Ana ekrana eklendiğinde uygulama gibi açılması için -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kaptan Köşkü">
+<meta name="mobile-web-app-capable" content="yes">
 <style>
 :root{
   --bg:#0b0b0c; --card:#151517; --card2:#1c1c1f; --text:#f5f5f2;
@@ -897,7 +905,11 @@ body.hide-favorites .fav-btn{display:none!important}
       <button class="btn primary" onclick="openMenu()">Menüyü Keşfet →</button>
       <button class="btn secondary" id="assistantBtn" onclick="openMenu(true)">✦ Yapay Zeka Asistanı</button>
     </div>
-    
+
+    <button id="notifyPermBtn" onclick="requestNotificationPermission()" style="display:none;margin:12px auto 0;padding:9px 16px;border-radius:999px;border:1px solid rgba(215,173,91,.4);background:rgba(215,173,91,.08);color:var(--gold2);font-size:12px;cursor:pointer;">
+      🔔 Kampanya Bildirimlerini Aç
+    </button>
+
     <!-- Canlı Müzik Takvimi - Yan Yana Kaydırılabilir -->
     <div class="music-calendar" id="musicCalendar">
       <div class="music-calendar-header">
@@ -1027,6 +1039,7 @@ body.hide-favorites .fav-btn{display:none!important}
       <button class="admin-tab active" data-tab="products" onclick="switchTab('products')">📦 Ürünler</button>
       <button class="admin-tab" data-tab="categories" onclick="switchTab('categories')">📂 Kategoriler</button>
       <button class="admin-tab" data-tab="design" onclick="switchTab('design')">🎨 Tasarım</button>
+      <button class="admin-tab" data-tab="push" onclick="switchTab('push')">🔔 Bildirim</button>
       <button class="admin-tab" data-tab="calendar" onclick="switchTab('calendar')">🎵 Takvim</button>
       <button class="admin-tab" data-tab="social" onclick="switchTab('social')">🔗 Sosyal</button>
       <button class="admin-tab" data-tab="announcement" onclick="switchTab('announcement')">📢 Duyuru</button>
@@ -1319,6 +1332,33 @@ body.hide-favorites .fav-btn{display:none!important}
       </div>
     </div>
 
+    <!-- Bildirim Tab -->
+    <div class="admin-tab-content" id="tab-push">
+      <div class="admin-panel">
+        <h3>🔔 Müşterilere Bildirim Gönder</h3>
+        <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">
+          Menüyü ana ekranına eklemiş veya yakın zamanda açmış olan müşterilere bir bildirim gönderin
+          (örn. "Bugüne özel %20 indirim!"). Bildirim, müşterinin uygulamayı açık tuttuğu ya da
+          telefonunun arka planda kısa süre önce çalıştırdığı durumlarda gösterilir — tamamen kapalı
+          bir uygulamayı her zaman uyandıramayabilir, bu tarayıcıların genel bir sınırlamasıdır.
+        </p>
+        <div class="form-grid">
+          <div class="field full">
+            <label>Başlık</label>
+            <input type="text" id="pushTitle" placeholder="Örn. Kaptan Köşkü'den Haber Var! 🎉" maxlength="60">
+          </div>
+          <div class="field full">
+            <label>Mesaj</label>
+            <textarea id="pushBody" placeholder="Örn. Bugün 17:00-19:00 arası tüm pastalarda %20 indirim!" maxlength="150"></textarea>
+          </div>
+        </div>
+        <div class="admin-actions">
+          <button class="btn primary" onclick="sendPushNotification()">🔔 Bildirimi Gönder</button>
+        </div>
+        <div id="pushHistoryList" style="margin-top:16px;display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
     <!-- Ayarlar Tab -->
     <div class="admin-tab-content" id="tab-settings">
       <div class="admin-panel">
@@ -1391,7 +1431,8 @@ body.hide-favorites .fav-btn{display:none!important}
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
   import {
     getFirestore, doc, getDoc, setDoc, deleteDoc,
-    collection, getDocs, onSnapshot, writeBatch, increment
+    collection, getDocs, onSnapshot, writeBatch, increment,
+    addDoc, query, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -1406,7 +1447,7 @@ body.hide-favorites .fav-btn{display:none!important}
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
 
-  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment };
+  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit };
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script>
@@ -2834,6 +2875,119 @@ function sendChat(){
  },550+Math.random()*450);
 }
 
+// ===== PWA: SERVICE WORKER & BİLDİRİMLER =====
+function registerServiceWorker(){
+  if(!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Service worker kaydı başarısız:', e));
+}
+
+function initNotifications(){
+  const btn = document.getElementById('notifyPermBtn');
+  if(!btn) return;
+  if(!('Notification' in window)){
+    btn.style.display = 'none';
+    return;
+  }
+  // Daha önce izin verilmemiş/reddedilmemişse (varsayılan durum) butonu göster
+  btn.style.display = (Notification.permission === 'default') ? 'block' : 'none';
+}
+
+function requestNotificationPermission(){
+  if(!('Notification' in window)) return;
+  Notification.requestPermission().then(perm=>{
+    const btn = document.getElementById('notifyPermBtn');
+    if(btn) btn.style.display = 'none';
+    if(perm === 'granted'){
+      showInAppToast('🔔 Bildirimler Açıldı', 'Kampanya ve duyurulardan haberdar olacaksınız.');
+    }
+  });
+}
+
+function showInAppToast(title, body){
+  let toast = document.getElementById('inAppToast');
+  if(!toast){
+    toast = document.createElement('div');
+    toast.id = 'inAppToast';
+    toast.style.cssText = 'position:fixed;top:14px;left:50%;transform:translateX(-50%) translateY(-120%);'
+      +'max-width:340px;width:90%;background:linear-gradient(160deg,#1c1c1f,#121213);border:1px solid rgba(215,173,91,.4);'
+      +'border-radius:14px;padding:12px 16px;z-index:9999;box-shadow:0 14px 40px rgba(0,0,0,.5);'
+      +'transition:transform .4s cubic-bezier(.2,1,.4,1);';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = `<div style="font-weight:700;color:var(--gold2);font-size:13px;margin-bottom:3px;">${escapeHtml(title||'')}</div><div style="font-size:12px;color:var(--text);opacity:.9;">${escapeHtml(body||'')}</div>`;
+  requestAnimationFrame(()=>{ toast.style.transform = 'translateX(-50%) translateY(0)'; });
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(()=>{
+    toast.style.transform = 'translateX(-50%) translateY(-120%)';
+  }, 5000);
+}
+
+function triggerNotificationDisplay(title, body){
+  // Her zaman uygulama içi bir bildirim (toast) göster
+  showInAppToast(title, body);
+
+  // Mümkünse gerçek bir sistem bildirimi de göster
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.ready.then(reg=>{
+      reg.active && reg.active.postMessage({ type:'SHOW_NOTIFICATION', title, body });
+    }).catch(()=>{
+      try{ new Notification(title, {body, icon:'./icon-192.png'}); }catch(e){}
+    });
+  }else{
+    try{ new Notification(title, {body, icon:'./icon-192.png'}); }catch(e){}
+  }
+}
+
+function sendPushNotification(){
+  const title = document.getElementById('pushTitle').value.trim();
+  const body = document.getElementById('pushBody').value.trim();
+  if(!title || !body){
+    alert('Lütfen başlık ve mesaj alanlarını doldurun.');
+    return;
+  }
+  if(!window.__fbPush){
+    alert('⚠️ Bulut bağlantısı henüz hazır değil, birkaç saniye sonra tekrar deneyin.');
+    return;
+  }
+  const { addDoc, collectionRef } = window.__fbPush;
+  addDoc(collectionRef, { title, body, sentAt: Date.now() })
+    .then(()=>{
+      document.getElementById('pushTitle').value = '';
+      document.getElementById('pushBody').value = '';
+      alert('✅ Bildirim gönderildi. Uygulamayı açık tutan veya yakın zamanda kullanan müşterilere iletilecek.');
+    })
+    .catch(e=>{
+      console.warn('Bildirim gönderilemedi:', e);
+      alert('❌ Bildirim gönderilemedi, lütfen tekrar deneyin.');
+    });
+}
+
+function renderPushHistory(){
+  const container = document.getElementById('pushHistoryList');
+  if(!container) return;
+  let list = [];
+  try{ list = JSON.parse(localStorage.getItem('kaptanKoskuPushHistory') || '[]'); }catch(e){}
+  if(!list.length){
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;">Henüz bildirim gönderilmedi.</div>';
+    return;
+  }
+  container.innerHTML = '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:4px;">Son Gönderilenler</div>' +
+    list.map(n => {
+      const d = new Date(n.sentAt);
+      const dateStr = d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+      return `
+        <div class="product-row">
+          <div class="product-info">
+            <strong>${escapeHtml(n.title)}</strong>
+            <small>${escapeHtml(n.body)} • ${dateStr}</small>
+          </div>
+        </div>
+      `;
+    }).join('');
+}
+
 // ===== QR KOD =====
 function initQrCode(){
   const img = document.getElementById('menuQrCode');
@@ -2929,7 +3083,7 @@ async function initCloudSync(){
     console.warn('Bulut bağlantısı kurulamadı, cihaz içi (localStorage) modda devam ediliyor.');
     return;
   }
-  const {db, doc, getDoc, setDoc, collection, onSnapshot, writeBatch, increment} = window.__fb;
+  const {db, doc, getDoc, setDoc, collection, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit} = window.__fb;
 
   try{
     const metaRef = doc(db,'settings','meta');
@@ -3030,6 +3184,31 @@ async function initCloudSync(){
     if(document.getElementById('tab-design')) fillThemeForm(t);
   }, err=>console.warn('Tasarım senkronizasyon hatası:', err));
 
+  // ---- Bildirimler (Push) ----
+  window.__fbPush = { addDoc, collectionRef: collection(db,'notifications') };
+  const notifQuery = query(collection(db,'notifications'), orderBy('sentAt','desc'), limit(10));
+  onSnapshot(notifQuery, snap=>{
+    const list = [];
+    snap.forEach(d=> list.push({id:d.id, ...d.data()}));
+    localStorage.setItem('kaptanKoskuPushHistory', JSON.stringify(list));
+    if(document.getElementById('pushHistoryList')) renderPushHistory();
+
+    if(!list.length) return;
+    const newest = list[0];
+    const lastSeenRaw = localStorage.getItem('kaptanKoskuLastNotifSeen');
+
+    if(lastSeenRaw === null){
+      // İlk kez: geçmiş bildirimleri "yeni" sayıp göstermeyelim, sadece temel çizgiyi kaydedelim
+      localStorage.setItem('kaptanKoskuLastNotifSeen', String(newest.sentAt));
+      return;
+    }
+    const lastSeen = Number(lastSeenRaw);
+    if(newest.sentAt > lastSeen){
+      localStorage.setItem('kaptanKoskuLastNotifSeen', String(newest.sentAt));
+      triggerNotificationDisplay(newest.title, newest.body);
+    }
+  }, err=>console.warn('Bildirim senkronizasyon hatası:', err));
+
   onSnapshot(doc(db,'settings','stats'), snap=>{
     const el = document.getElementById('statViewCount');
     if(el) el.textContent = snap.exists() ? (snap.data().viewCount || 0) : 0;
@@ -3059,6 +3238,9 @@ document.addEventListener('DOMContentLoaded', function() {
   initCloudSync();
   initQrCode();
   checkTimedAnnouncements();
+  registerServiceWorker();
+  initNotifications();
+  renderPushHistory();
   
   const searchInput = document.getElementById('productSearch');
   if (searchInput) {
