@@ -943,6 +943,13 @@ body.hide-waiter .waiter-btn{display:none!important}
     });
   });
 </script>
+<!-- Push gönderimi için Supabase Edge Function ayarları. Kurulum rehberindeki iki değeri doldurun. -->
+<script>
+  window.KAPTAN_PUSH_CONFIG = {
+    supabaseUrl: "https://xcqglixhlilrrhwvevwm.supabase.co",
+    supabaseAnonKey: "sb_publishable_eABQXhHXQOZmg-ogMnRGpQ_c6bMNxO7"
+  };
+</script>
 </head>
 <body>
 
@@ -1435,9 +1442,9 @@ body.hide-waiter .waiter-btn{display:none!important}
         <h3>🔔 Müşterilere Bildirim Gönder</h3>
         <p style="color:var(--muted);font-size:12px;margin:0 0 10px;">
           Menüyü ana ekranına eklemiş veya yakın zamanda açmış olan müşterilere bir bildirim gönderin
-          (örn. "Bugüne özel %20 indirim!"). Bildirim, müşterinin uygulamayı açık tuttuğu ya da
-          telefonunun arka planda kısa süre önce çalıştırdığı durumlarda gösterilir — tamamen kapalı
-          bir uygulamayı her zaman uyandıramayabilir, bu tarayıcıların genel bir sınırlamasıdır.
+          (örn. "Bugüne özel %20 indirim!"). Ana ekranına ekleyip bildirim izni veren müşterilere,
+          uygulama kapalıyken de OneSignal web push üzerinden bildirim gönderilebilir. iPhone’da
+          bunun için iOS/iPadOS 16.4 veya üzeri ve ana ekrana eklenmiş uygulama gerekir.
         </p>
         <div class="form-grid">
           <div class="field full">
@@ -3232,28 +3239,54 @@ function triggerNotificationDisplay(title, body){
   }
 }
 
-function sendPushNotification(){
+async function sendPushNotification(){
   const title = document.getElementById('pushTitle').value.trim();
   const body = document.getElementById('pushBody').value.trim();
-  if(!title || !body){
-    alert('Lütfen başlık ve mesaj alanlarını doldurun.');
+  if(!title || !body){ alert('Lütfen başlık ve mesaj alanlarını doldurun.'); return; }
+
+  const cfg = window.KAPTAN_PUSH_CONFIG || {};
+  if(!cfg.supabaseUrl || cfg.supabaseUrl.includes('SUPABASE-PROJECT-REF') ||
+     !cfg.supabaseAnonKey || cfg.supabaseAnonKey.includes('SUPABASE_ANON_KEY_BURAYA')){
+    alert('Push sunucusu henüz yapılandırılmadı. ZIP içindeki KURULUM.txt dosyasındaki Supabase adımlarını tamamlayın.');
     return;
   }
-  if(!window.__fbPush){
-    alert('⚠️ Bulut bağlantısı henüz hazır değil, birkaç saniye sonra tekrar deneyin.');
-    return;
-  }
-  const { addDoc, collectionRef } = window.__fbPush;
-  addDoc(collectionRef, { title, body, sentAt: Date.now() })
-    .then(()=>{
-      document.getElementById('pushTitle').value = '';
-      document.getElementById('pushBody').value = '';
-      alert('✅ Bildirim gönderildi. Uygulamayı açık tutan veya yakın zamanda kullanan müşterilere iletilecek.');
-    })
-    .catch(e=>{
-      console.warn('Bildirim gönderilemedi:', e);
-      alert('❌ Bildirim gönderilemedi, lütfen tekrar deneyin.');
+  const fb = window.__fb;
+  const currentUser = fb && fb.auth && fb.auth.currentUser;
+  if(!currentUser){ alert('Önce yönetici hesabıyla giriş yapmalısınız.'); return; }
+
+  const button = document.querySelector('#tab-push button[onclick="sendPushNotification()"]');
+  if(button){ button.disabled = true; button.textContent = 'Gönderiliyor…'; }
+  try{
+    const idToken = await currentUser.getIdToken(true);
+    const response = await fetch(cfg.supabaseUrl.replace(/\/$/, '') + '/functions/v1/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + cfg.supabaseAnonKey,
+        'apikey': cfg.supabaseAnonKey,
+        'x-firebase-id-token': idToken
+      },
+      body: JSON.stringify({ title, body })
     });
+    const result = await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error || ('Sunucu hatası: ' + response.status));
+
+    // Firestore yalnızca eski admin bildirim geçmişini göstermek için best-effort kullanılır.
+    if(window.__fbPush){
+      try{
+        const {addDoc, collectionRef} = window.__fbPush;
+        await addDoc(collectionRef, { title, body, sentAt: Date.now(), provider: 'onesignal', recipients: result.recipients ?? null });
+      }catch(logErr){ console.warn('Bildirim gönderildi ancak geçmişe yazılamadı:', logErr); }
+    }
+    document.getElementById('pushTitle').value = '';
+    document.getElementById('pushBody').value = '';
+    alert('✅ Gerçek Push bildirimi OneSignal’a gönderildi. Abone olan cihazlara iletilmek üzere kuyruğa alındı.');
+  }catch(e){
+    console.error('Push gönderim hatası:', e);
+    alert('❌ Bildirim gönderilemedi: ' + (e.message || e));
+  }finally{
+    if(button){ button.disabled = false; button.textContent = '🔔 Bildirimi Gönder'; }
+  }
 }
 
 function renderPushHistory(){
