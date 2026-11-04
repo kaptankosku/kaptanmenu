@@ -1733,7 +1733,6 @@ body.hide-waiter .waiter-btn{display:none!important}
     addDoc, query, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
   import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAnn8z240kW89sRyzm4WOG3piNTDpFHcc8",
@@ -1747,8 +1746,7 @@ body.hide-waiter .waiter-btn{display:none!important}
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
   const auth = getAuth(app);
-  const functions = getFunctions(app, 'europe-west1');
-  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createOrder: httpsCallable(functions, 'createOrder') };
+  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged };
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script>
@@ -3544,33 +3542,49 @@ else{el.innerHTML=c.map(row=>{const p=products.find(x=>String(x.id)===String(row
 const discount=activeCoupon?total*activeCoupon.percent/100:0;document.getElementById('cartTotal').textContent=moneyTR(Math.max(0,total-discount))+(discount?' · '+activeCoupon.percent+'% indirim':'');}
 async function submitOrder(){
  const c=getCart(),table=document.getElementById('orderTable').value.trim(),err=document.getElementById('cartError'),btn=document.getElementById('submitOrderBtn');err.textContent='';
- if(!c.length){err.textContent='Sepetiniz boş.';return;}if(!table){err.textContent='Lütfen masa numaranızı girin.';return;}if(!window.__fb){err.textContent='Sunucu bağlantısı henüz hazır değil.';return;}
- const items=c.map(x=>({productId:String(x.id),quantity:Math.max(1,Math.min(99,Number(x.qty)||1))}));
+ if(!c.length){err.textContent='Sepetiniz boş.';return;}if(!table){err.textContent='Lütfen masa numaranızı girin.';return;}
+ const lines=[];let subtotal=0;for(const row of c){const p=products.find(x=>String(x.id)===String(row.id));if(!p)continue;const price=productCurrentPrice(p),qty=Math.max(1,Math.min(99,Number(row.qty)||1));lines.push({productId:String(p.id),name:String(p.name),quantity:qty,unitPrice:price,lineTotal:Number((price*qty).toFixed(2))});subtotal+=price*qty;}
+ if(!lines.length){err.textContent='Sepetteki ürünler artık menüde bulunmuyor.';return;}
+ const discountPercent=activeCoupon?Math.max(0,Math.min(50,Number(activeCoupon.percent)||0)):0;
  btn.disabled=true;btn.textContent='Gönderiliyor…';
  try{
-   const {createOrder}=window.__fb;
-   const result=await createOrder({table,items,coupon:(activeCoupon?.code||'').toUpperCase(),note:document.getElementById('orderNote').value.trim()});
-   const orderId=result.data.orderId;const finalTotal=Number(result.data.total)||0;
+   const result=await callKaptanOrderApi({action:'create',table,items:lines,note:document.getElementById('orderNote').value.trim(),discountPercent});
+   const orderId=result.orderId;const finalTotal=Number(result.total)||0;
    saveCart([]);if(finalTotal>=100){const pts=Math.floor(finalTotal/100);localStorage.setItem('kaptanKoskuLoyaltyPoints',String((Number(localStorage.getItem('kaptanKoskuLoyaltyPoints'))||0)+pts));renderLoyalty();}
    activeCoupon=null;document.getElementById('orderCoupon').value='';document.getElementById('couponMessage').textContent='';document.getElementById('orderNote').value='';renderCart();
    document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:28px 8px"><div style="font-size:42px">✅</div><h3 style="color:var(--gold2)">Siparişiniz alındı!</h3><p style="color:var(--muted);font-size:13px">Masa '+escapeHtml(table)+' için siparişiniz işletmeye iletildi.</p><small style="color:var(--muted)">Sipariş No: '+escapeHtml(String(orderId).slice(-7).toUpperCase())+'</small></div>';
    document.getElementById('cartTotal').textContent='0,00 ₺';setTimeout(closeCart,4500);
- }catch(e){
-   console.error('Sipariş gönderilemedi - ayrıntılı hata:', e);
-   const code = e?.code || e?.name || 'bilinmeyen-hata';
-   const message = e?.message || String(e);
-   const details = e?.details ? ' | Ayrıntı: ' + (typeof e.details === 'string' ? e.details : JSON.stringify(e.details)) : '';
-   err.textContent = 'Sipariş gönderilemedi (' + code + '): ' + message + details;
- }
+ }catch(e){console.error('Sipariş gönderilemedi',e);err.textContent='Sipariş gönderilemedi: '+(e?.message||'Bağlantınızı kontrol edip tekrar deneyin.');}
  finally{btn.disabled=false;btn.textContent='Siparişi Gönder →';}
+}
+
+// Supabase Edge Function üzerinden sipariş API'si. Firestore yalnızca diğer menü/bildirim verileri için kullanılır.
+const KAPTAN_ORDER_ENDPOINT='https://xcqglixhlilrrhwvevwm.supabase.co/functions/v1/create-order';
+async function callKaptanOrderApi(payload,admin=false){
+ const cfg=window.KAPTAN_PUSH_CONFIG||{};
+ if(!cfg.supabaseUrl||!cfg.supabaseAnonKey)throw new Error('Supabase bağlantı ayarları bulunamadı.');
+ const headers={'Content-Type':'application/json','apikey':cfg.supabaseAnonKey,'Authorization':'Bearer '+cfg.supabaseAnonKey};
+ if(admin){const user=window.__fb?.auth?.currentUser;if(!user)throw new Error('Yönetici oturumu bulunamadı.');headers['x-firebase-id-token']=await user.getIdToken();}
+ const response=await fetch(KAPTAN_ORDER_ENDPOINT,{method:'POST',headers,body:JSON.stringify(payload)});
+ let data={};try{data=await response.json();}catch(_){ }
+ if(!response.ok||data.success===false)throw new Error(data.error||('Sipariş servisi hata verdi ('+response.status+').'));
+ return data;
 }
 
 // ===== ADMIN: GELEN SİPARİŞLER =====
 let orderUnsub=null,orderFirstSnapshot=true,orders=[];
-function startOrderListener(){if(orderUnsub||!window.__fb)return;const {db,collection,query,orderBy,limit,onSnapshot}=window.__fb;orderFirstSnapshot=true;const q=query(collection(db,'orders'),orderBy('createdAt','desc'),limit(100));orderUnsub=onSnapshot(q,snap=>{const fresh=[];snap.forEach(d=>fresh.push({id:d.id,...d.data()}));if(!orderFirstSnapshot){snap.docChanges().forEach(ch=>{if(ch.type==='added'){const o=ch.doc.data();if(o.status==='pending'){playWaiterBeep();triggerNotificationDisplay('🧺 Yeni Sipariş','Masa '+o.table+' için yeni sipariş geldi.');}}});}orderFirstSnapshot=false;orders=fresh;renderOrders();renderKitchen();renderWaiterReadyOrders();renderReports();},e=>{console.error('Sipariş dinleme hatası',e);const el=document.getElementById('orderList');if(el)el.innerHTML='<div style="color:#ff9b9b;font-size:12px">Siparişler okunamadı. Firestore erişim kurallarını kontrol edin.</div>';});}
-function stopOrderListener(){if(orderUnsub){orderUnsub();orderUnsub=null;}orders=[];}
+async function refreshSupabaseOrders(){
+ try{
+  const data=await callKaptanOrderApi({action:'list'},true);
+  const fresh=(data.orders||[]).map(o=>({id:String(o.id),table:String(o.table_number||''),items:Array.isArray(o.items)?o.items:[],total:Number(o.total)||0,note:o.note||'',status:o.status||'pending',createdAt:o.created_at?new Date(o.created_at).getTime():Date.now(),updatedAt:o.updated_at?new Date(o.updated_at).getTime():undefined}));
+  if(!orderFirstSnapshot){const oldIds=new Set(orders.map(o=>o.id));fresh.forEach(o=>{if(!oldIds.has(o.id)&&o.status==='pending'){playWaiterBeep();triggerNotificationDisplay('🧺 Yeni Sipariş','Masa '+o.table+' için yeni sipariş geldi.');}});}
+  orderFirstSnapshot=false;orders=fresh;renderOrders();renderKitchen();renderWaiterReadyOrders();renderReports();
+ }catch(e){console.error('Supabase siparişleri alınamadı:',e);const el=document.getElementById('orderList');if(el)el.innerHTML='<div style="color:#ff9b9b;font-size:12px">Siparişler alınamadı: '+escapeHtml(e.message||'Bağlantı hatası')+'</div>';}
+}
+function startOrderListener(){if(orderUnsub)return;orderFirstSnapshot=true;refreshSupabaseOrders();orderUnsub=setInterval(refreshSupabaseOrders,5000);}
+function stopOrderListener(){if(orderUnsub){clearInterval(orderUnsub);orderUnsub=null;}orders=[];}
 function renderOrders(){const el=document.getElementById('orderList');if(!el)return;const pending=orders.filter(o=>o.status==='pending'),others=orders.filter(o=>o.status!=='pending');if(!orders.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">Henüz sipariş yok.</div>';return;}el.innerHTML=[...pending,...others].map(o=>{const items=(o.items||[]).map(i=>`<div style="font-size:12px;color:var(--text);padding:3px 0">${Number(i.quantity)||1} × ${escapeHtml(i.name)} <span style="color:var(--muted)">(${(Number(i.lineTotal)||0).toFixed(2).replace('.',',')} ₺)</span></div>`).join('');const date=new Date(o.createdAt||Date.now()).toLocaleString('tr-TR');const status=o.status==='pending'?'Bekliyor':o.status==='preparing'?'Hazırlanıyor':o.status==='ready'?'Hazır':'Tamamlandı';return `<div class="admin-panel" style="padding:13px;border-color:${o.status==='pending'?'rgba(215,173,91,.55)':'var(--line)'}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="color:var(--gold2)">🧺 Masa ${escapeHtml(o.table||'?')}</strong><span class="order-status">${status}</span></div><small style="color:var(--muted)">${escapeHtml(date)} · #${escapeHtml(o.id.slice(-7).toUpperCase())}</small><div style="margin:10px 0">${items}</div>${o.note?`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Not: ${escapeHtml(o.note)}</div>`:''}<div style="font-weight:800;color:var(--gold2);margin-bottom:10px">Toplam: ${(Number(o.total)||0).toFixed(2).replace('.',',')} ₺</div>${o.status==='pending'?`<div class="admin-actions"><button class="btn secondary" onclick="updateOrderStatus('${o.id}','preparing')">Hazırlanıyor</button><button class="btn primary" onclick="updateOrderStatus('${o.id}','completed')">✓ Tamamlandı</button></div>`:o.status==='preparing'?`<div class="admin-actions"><button class="btn secondary" onclick="updateOrderStatus('${o.id}','ready')">✓ Mutfakta Hazır</button><button class="btn primary" onclick="updateOrderStatus('${o.id}','completed')">✓ Tamamlandı</button></div>`:o.status==='ready'?`<div class="admin-actions"><button class="btn primary" onclick="updateOrderStatus('${o.id}','completed')">Servis Edildi</button></div>`:''}</div>`;}).join('');const tab=document.querySelector('.admin-tab[data-tab="orders"]');if(tab)tab.textContent=pending.length?`🧺 Siparişler (${pending.length})`:'🧺 Siparişler';}
-async function updateOrderStatus(id,status){try{const {db,doc,setDoc}=window.__fb;await setDoc(doc(db,'orders',id),{status,updatedAt:Date.now()},{merge:true});}catch(e){alert('Sipariş durumu güncellenemedi. Firestore izinlerini kontrol edin.');}}
+async function updateOrderStatus(id,status){try{await callKaptanOrderApi({action:'update',orderId:id,status},true);await refreshSupabaseOrders();}catch(e){console.error('Sipariş durumu güncellenemedi:',e);alert('Sipariş durumu güncellenemedi: '+(e.message||'Bağlantı hatası'));}}
 
 
 // ===== GARSON ÇAĞIR =====
@@ -4099,7 +4113,7 @@ async function applyOrderCoupon(){const code=(document.getElementById('orderCoup
 async function saveCouponSettings(){const code=(document.getElementById('couponCodeAdmin').value||'').trim().toUpperCase(),percent=Number(document.getElementById('couponPercentAdmin').value);const el=document.getElementById('couponAdminStatus');if(!/^[A-Z0-9_-]{3,20}$/.test(code)||percent<1||percent>50){el.textContent='3-20 karakterli kod ve %1-%50 arasında indirim girin.';return;}try{const {db,doc,setDoc}=window.__fb;await setDoc(doc(db,'settings','activeCoupon'),{code,percent,active:true,updatedAt:Date.now()});el.textContent=code+' kuponu aktif.';}catch(e){el.textContent='Kaydedilemedi. Firestore izinlerini kontrol edin.';}}
 async function disableCoupon(){try{const {db,doc,setDoc}=window.__fb;await setDoc(doc(db,'settings','activeCoupon'),{active:false,updatedAt:Date.now()},{merge:true});activeCoupon=null;document.getElementById('couponAdminStatus').textContent='Kupon kapatıldı.';}catch(e){document.getElementById('couponAdminStatus').textContent='Kupon kapatılamadı.';}}
 async function requestTableBill(){const table=(document.getElementById('tableAccountNo').value||'').trim(),out=document.getElementById('tableAccountResult');if(!table){out.textContent='Masa numaranızı girin.';return;}if(!window.__fb){out.textContent='Sunucu bağlantısı hazır değil.';return;}try{const {db,collection,addDoc}=window.__fb;await addDoc(collection(db,'tableRequests'),{table,type:'bill',status:'pending',createdAt:Date.now()});out.textContent='✅ Hesap talebiniz masanıza iletildi.';}catch(e){out.textContent='Talep gönderilemedi. İnternet bağlantınızı kontrol edin.';}}
-async function viewTableAccount(){const table=(document.getElementById('tableAccountNo').value||'').trim(),out=document.getElementById('tableAccountResult');if(!table){out.textContent='Masa numaranızı girin.';return;}if(!window.__fb){out.textContent='Sunucu bağlantısı hazır değil.';return;}out.textContent='Siparişler yükleniyor…';try{const {db,collection,getDocs,query,orderBy,limit}=window.__fb;const snap=await getDocs(query(collection(db,'orders'),orderBy('createdAt','desc'),limit(100)));let sum=0,lines=[];snap.forEach(d=>{const o=d.data();if(String(o.table)===table&&['pending','preparing','ready'].includes(o.status)){sum+=Number(o.total)||0;lines.push('#'+d.id.slice(-6).toUpperCase()+' · '+(o.items||[]).map(i=>(i.quantity||1)+'× '+i.name).join(', '));}});out.innerHTML=lines.length?lines.map(escapeHtml).join('<br>')+'<br><strong style="color:var(--gold2)">Açık hesap: '+moneyTR(sum)+'</strong>':'Bu masa için açık sipariş bulunamadı.';}catch(e){out.textContent='Masa siparişleri alınamadı.';}}
+async function viewTableAccount(){const table=(document.getElementById('tableAccountNo').value||'').trim(),out=document.getElementById('tableAccountResult');if(!table){out.textContent='Masa numaranızı girin.';return;}out.textContent='Siparişler yükleniyor…';try{const data=await callKaptanOrderApi({action:'table-account',table});const rows=data.orders||[];let sum=0,lines=[];rows.forEach(o=>{sum+=Number(o.total)||0;lines.push('#'+String(o.id).slice(-6).toUpperCase()+' · '+(o.items||[]).map(i=>(i.quantity||1)+'× '+i.name).join(', '));});out.innerHTML=lines.length?lines.map(escapeHtml).join('<br>')+'<br><strong style="color:var(--gold2)">Açık hesap: '+moneyTR(sum)+'</strong>':'Bu masa için açık sipariş bulunamadı.';}catch(e){console.error(e);out.textContent='Masa siparişleri alınamadı: '+(e.message||'Bağlantı hatası');}}
 let tableReqs=[];
 function startTableRequestListener(){if(tableRequestUnsub)return;if(!window.__fb){window.addEventListener('firebase-ready',startTableRequestListener,{once:true});return;}const {db,collection,query,orderBy,limit,onSnapshot}=window.__fb;tableRequestUnsub=onSnapshot(query(collection(db,'tableRequests'),orderBy('createdAt','desc'),limit(50)),snap=>{tableReqs=[];snap.forEach(d=>tableReqs.push({id:d.id,...d.data()}));renderTableRequests();},e=>{const el=document.getElementById('tableRequestList');if(el)el.textContent='Masa talepleri okunamadı. Firestore izinlerini kontrol edin.';});}
 function renderTableRequests(){const el=document.getElementById('tableRequestList');if(!el)return;el.innerHTML=tableReqs.length?tableReqs.map(r=>`<div class="product-row"><div class="product-info"><strong>🍽 Masa ${escapeHtml(r.table||'?')} · ${r.type==='bill'?'Hesap Talebi':'Diğer Talep'}</strong><small>${new Date(r.createdAt||Date.now()).toLocaleString('tr-TR')} · ${r.status==='pending'?'Bekliyor':'Tamamlandı'}</small></div>${r.status==='pending'?`<button class="btn primary" style="width:auto" onclick="finishTableRequest('${r.id}')">Tamamlandı</button>`:''}</div>`).join(''):'<div class="feature-muted">Bekleyen masa talebi yok.</div>';}
