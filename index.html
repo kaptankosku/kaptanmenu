@@ -1070,8 +1070,9 @@ body.hide-waiter .waiter-btn{display:none!important}
   <div class="login-box" id="loginBox">
     <div class="logo" style="width:56px;height:56px;margin:0 auto 12px;border:1px solid rgba(215,173,91,.6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold2);font-size:24px;font-family:Georgia,serif;background:linear-gradient(160deg,#161613,#0d0d0e);box-shadow:0 0 30px rgba(215,173,91,.16),inset 0 0 15px rgba(215,173,91,.08);">K</div>
     <h2>Yönetim Paneli</h2>
-    <p>Devam etmek için şifreyi girin</p>
-    <input type="password" id="adminPassword" placeholder="••••••" maxlength="20" onkeydown="if(event.key==='Enter')checkAdminPassword()" autofocus>
+    <p>Yetkili personel hesabınızla giriş yapın</p>
+    <input type="email" id="adminEmail" placeholder="E-posta adresi" autocomplete="username" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:14px;outline:none;text-align:left;letter-spacing:0;margin-bottom:9px" onkeydown="if(event.key==='Enter')checkAdminPassword()" autofocus>
+    <input type="password" id="adminPassword" placeholder="Şifre" autocomplete="current-password" maxlength="128" onkeydown="if(event.key==='Enter')checkAdminPassword()">
     <div class="login-error" id="loginError"></div>
     <div class="login-actions">
       <button class="btn btn-back" onclick="goBackFromLogin()">← Geri Dön</button>
@@ -1699,6 +1700,8 @@ body.hide-waiter .waiter-btn{display:none!important}
     collection, getDocs, onSnapshot, writeBatch, increment,
     addDoc, query, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAnn8z240kW89sRyzm4WOG3piNTDpFHcc8",
@@ -1711,8 +1714,9 @@ body.hide-waiter .waiter-btn{display:none!important}
 
   const app = initializeApp(firebaseConfig);
   const db = getFirestore(app);
-
-  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit };
+  const auth = getAuth(app);
+  const functions = getFunctions(app, 'europe-west1');
+  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createOrder: httpsCallable(functions, 'createOrder'), migrateLegacyData: httpsCallable(functions, 'migrateLegacyData') };
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script>
@@ -2429,99 +2433,41 @@ function closeTimedAnnouncement(){
   document.getElementById('timedAnnouncementModal').style.display = 'none';
 }
 
-// ===== ŞİFRE YÖNETİMİ =====
-const ADMIN_PASSWORD_KEY = "kaptanKoskuAdminPasswordHash";
-const ADMIN_ATTEMPTS_KEY = "kaptanKoskuAdminAttempts";
+// ===== GÜVENLİ YÖNETİCİ GİRİŞİ (Firebase Authentication) =====
 let isAdminLoggedIn = false;
 let loginSource = null;
-
-async function hashPassword(pass){
-  const enc = new TextEncoder().encode(pass);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
-}
-
-async function getAdminPasswordHash(){
-  const stored = localStorage.getItem(ADMIN_PASSWORD_KEY);
-  if(stored) return stored;
-  const defaultHash = await hashPassword("kaptan2025");
-  localStorage.setItem(ADMIN_PASSWORD_KEY, defaultHash);
-  return defaultHash;
-}
-
-async function setAdminPassword(newPass){
-  const hash = await hashPassword(newPass);
-  localStorage.setItem(ADMIN_PASSWORD_KEY, hash);
-  cloudSet('settings', 'auth', { passwordHash: hash });
-}
-
-function getFailedAttempts(){
-  const data = JSON.parse(localStorage.getItem(ADMIN_ATTEMPTS_KEY) || '{"count":0,"lockUntil":0}');
-  return data;
-}
-function setFailedAttempts(data){
-  localStorage.setItem(ADMIN_ATTEMPTS_KEY, JSON.stringify(data));
-}
-
 async function checkAdminPassword(){
   unlockWaiterAudio();
-  const input = document.getElementById('adminPassword');
-  const error = document.getElementById('loginError');
-  const pass = input.value.trim();
-
-  const attempts = getFailedAttempts();
-  const now = Date.now();
-  if(attempts.lockUntil > now){
-    const secs = Math.ceil((attempts.lockUntil - now)/1000);
-    error.textContent = `⏳ Çok fazla hatalı deneme. ${secs} saniye sonra tekrar deneyin.`;
-    return;
-  }
-
-  if(!pass){
-    error.textContent = 'Lütfen şifreyi girin.';
-    document.getElementById('loginBox').classList.add('shake');
-    setTimeout(()=>document.getElementById('loginBox').classList.remove('shake'), 400);
-    return;
-  }
-
-  const passHash = await hashPassword(pass);
-  if(passHash === await getAdminPasswordHash()){
-    setFailedAttempts({count:0,lockUntil:0});
-    isAdminLoggedIn = true;
-    startWaiterListener();
-    startOrderListener();
-    document.getElementById('adminLogin').style.display = 'none';
-    document.getElementById('admin').style.display = 'block';
-    document.getElementById('home').style.display = 'none';
-    document.getElementById('menu').style.display = 'none';
-    const wBtn = document.getElementById('whatsappFloatBtn');
-    if(wBtn) wBtn.style.display='none';
-    populateCategories();
-    renderAdmin();
-    updateStats();
-    loadAnnouncement();
-    renderCalendarManager();
-    loadSocialLinks();
-    renderCategoryManager();
-    input.value = '';
-    error.textContent = '';
-    loginSource = null;
-    // Varsayılan olarak ürünler tab'ını göster
-    switchTab('products');
-  }else{
-    const newCount = attempts.count + 1;
-    if(newCount >= 5){
-      setFailedAttempts({count:0, lockUntil: Date.now() + 30000});
-      error.textContent = '❌ 5 hatalı deneme! 30 saniye kilitlendi.';
-    }else{
-      setFailedAttempts({count:newCount, lockUntil:0});
-      error.textContent = '❌ Yanlış şifre! Tekrar deneyin.';
-    }
-    input.value = '';
-    input.focus();
-    document.getElementById('loginBox').classList.add('shake');
-    setTimeout(()=>document.getElementById('loginBox').classList.remove('shake'), 400);
-  }
+  const email=(document.getElementById('adminEmail')?.value||'').trim().toLowerCase();
+  const pass=document.getElementById('adminPassword').value;
+  const error=document.getElementById('loginError');
+  if(!email || !pass){error.textContent='E-posta ve şifrenizi girin.';return;}
+  if(!window.__fb){error.textContent='Firebase bağlantısı hazır değil.';return;}
+  const btn=document.querySelector('#loginBox .btn.primary'); if(btn){btn.disabled=true;btn.textContent='Kontrol ediliyor…';}
+  try{
+    const {auth,signInWithEmailAndPassword}=window.__fb;
+    await signInWithEmailAndPassword(auth,email,pass);
+    // Eski yerel menü verilerini yalnızca doğrulanmış yönetici hesabı ile ilk kurulumda aktar.
+    try {
+      const {db,doc,getDoc,migrateLegacyData}=window.__fb;
+      const meta=await getDoc(doc(db,'settings','meta'));
+      if(!meta.exists()){
+        const productsLocal=JSON.parse(localStorage.getItem('kaptanKoskuProducts')||'[]');
+        await migrateLegacyData({products:productsLocal,categories:getCategories(),announcement:getAnnouncementData(),social:getSocialLinks(),calendar:getCalendarData(),timedAnnouncements:getTimedAnnouncements(),theme:getThemeData(),liveMusicMenu:getMusicMenuData()});
+      }
+      await initCloudSync();
+    } catch(migrationError) { console.error('İlk veri aktarımı başarısız:',migrationError); throw new Error('İlk kurulum aktarımı tamamlanamadı. Firebase Functions dağıtımını ve yönetici e-postası ayarını kontrol edin.'); }
+    isAdminLoggedIn=true;
+    document.getElementById('adminLogin').style.display='none';
+    document.getElementById('admin').style.display='block';
+    document.getElementById('home').style.display='none';
+    document.getElementById('menu').style.display='none';
+    const wBtn=document.getElementById('whatsappFloatBtn');if(wBtn)wBtn.style.display='none';
+    populateCategories();renderAdmin();updateStats();loadAnnouncement();renderCalendarManager();loadSocialLinks();renderCategoryManager();
+    startWaiterListener();startOrderListener();startTableRequestListener();
+    document.getElementById('adminPassword').value='';error.textContent='';loginSource=null;switchTab('orders');
+  }catch(e){console.error(e);error.textContent='Giriş başarısız. E-posta/şifreyi ve Firebase Auth yetkilendirmesini kontrol edin.';}
+  finally{if(btn){btn.disabled=false;btn.textContent='Giriş Yap';}}
 }
 
 function goBackFromLogin(){
@@ -2536,27 +2482,15 @@ function goBackFromLogin(){
   loginSource = null;
 }
 
-function logoutAdmin(){
-  isAdminLoggedIn = false;
-  stopWaiterListener();
-  stopOrderListener();
-  document.getElementById('admin').style.display = 'none';
-  document.getElementById('adminLogin').style.display = 'flex';
-  document.getElementById('adminPassword').value = '';
-  document.getElementById('loginError').textContent = '';
-  document.getElementById('adminPassword').focus();
-  loginSource = 'menu';
+async function logoutAdmin(){
+  isAdminLoggedIn=false;stopWaiterListener();stopOrderListener();
+  if(tableRequestUnsub){tableRequestUnsub();tableRequestUnsub=null;}
+  try{if(window.__fb)await window.__fb.signOut(window.__fb.auth);}catch(e){console.warn('Çıkış işlemi:',e);}
+  document.getElementById('admin').style.display='none';document.getElementById('adminLogin').style.display='flex';
+  document.getElementById('adminPassword').value='';document.getElementById('loginError').textContent='';loginSource='menu';
 }
 
-async function changePassword(){
-  const newPass = prompt('Yeni şifreyi girin (en az 4 karakter):');
-  if(newPass && newPass.trim().length >= 4){
-    await setAdminPassword(newPass.trim());
-    alert('✅ Şifre başarıyla değiştirildi!');
-  }else if(newPass !== null){
-    alert('❌ Şifre en az 4 karakter olmalıdır.');
-  }
-}
+async function changePassword(){alert('Personel şifreleri Firebase Console > Authentication bölümünden yönetilir.');}
 
 // ===== SAYFA GEÇİŞLERİ =====
 function openHome(){
@@ -2621,7 +2555,7 @@ function openAdmin(){
     document.getElementById('admin').style.display='none';
     document.getElementById('adminLogin').style.display='flex';
     document.body.style.background='var(--bg)';
-    setTimeout(()=>document.getElementById('adminPassword').focus(), 300);
+    setTimeout(()=>document.getElementById('adminEmail').focus(), 300);
   }
 }
 
@@ -3495,10 +3429,22 @@ function closeCart(){document.getElementById('cartModal').style.display='none';}
 function renderCart(){const c=getCart(),el=document.getElementById('cartItems');let total=0;if(!c.length){el.innerHTML='<div class="empty-products" style="text-align:center;padding:24px">Sepetiniz henüz boş. Menüden ürün ekleyebilirsiniz. ☕</div>';}
 else{el.innerHTML=c.map(row=>{const p=products.find(x=>String(x.id)===String(row.id));if(!p)return '';const price=productCurrentPrice(p),sum=price*row.qty;total+=sum;return `<div class="cart-line">${p.image?`<img src="${p.image}" alt="">`:'<div style="width:54px;height:54px;border-radius:10px;background:#222;display:grid;place-items:center">☕</div>'}<div class="cart-line-info"><strong>${escapeHtml(p.name)}</strong><small>${price.toFixed(2).replace('.',',')} ₺ × ${row.qty} = ${sum.toFixed(2).replace('.',',')} ₺</small></div><div class="qty-controls"><button onclick="changeCartQty('${escapeAttr(row.id)}',-1)">−</button><b>${row.qty}</b><button onclick="changeCartQty('${escapeAttr(row.id)}',1)">＋</button></div></div>`}).join('');}
 const discount=activeCoupon?total*activeCoupon.percent/100:0;document.getElementById('cartTotal').textContent=moneyTR(Math.max(0,total-discount))+(discount?' · '+activeCoupon.percent+'% indirim':'');}
-async function submitOrder(){const c=getCart(),table=document.getElementById('orderTable').value.trim(),err=document.getElementById('cartError'),btn=document.getElementById('submitOrderBtn');err.textContent='';if(!c.length){err.textContent='Sepetiniz boş.';return;}if(!table){err.textContent='Lütfen masa numaranızı girin.';return;}if(!window.__fb){err.textContent='Sunucu bağlantısı henüz hazır değil. Biraz sonra tekrar deneyin.';return;}
-const lines=[];let total=0;for(const row of c){const p=products.find(x=>String(x.id)===String(row.id));if(!p)continue;const price=productCurrentPrice(p),qty=Math.max(1,Math.min(99,Number(row.qty)||1));lines.push({productId:String(p.id),name:String(p.name),quantity:qty,unitPrice:price,lineTotal:price*qty});total+=price*qty;}
-if(!lines.length){err.textContent='Sepetteki ürünler artık menüde bulunmuyor.';return;}
-btn.disabled=true;btn.textContent='Gönderiliyor…';try{const {db,collection,addDoc}=window.__fb;const discount=activeCoupon?total*activeCoupon.percent/100:0;const finalTotal=Math.max(0,total-discount);const payload={table,items:lines,total:finalTotal,subtotal:total,discount,coupon:activeCoupon?.code||'',note:document.getElementById('orderNote').value.trim(),status:'pending',createdAt:Date.now(),source:'qr-menu'};const ref=await addDoc(collection(db,'orders'),payload);saveCart([]);if(finalTotal>=100){const pts=Math.floor(finalTotal/100);localStorage.setItem('kaptanKoskuLoyaltyPoints',String((Number(localStorage.getItem('kaptanKoskuLoyaltyPoints'))||0)+pts));renderLoyalty();}activeCoupon=null;document.getElementById('orderCoupon').value='';document.getElementById('couponMessage').textContent='';document.getElementById('orderNote').value='';renderCart();document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:28px 8px"><div style="font-size:42px">✅</div><h3 style="color:var(--gold2)">Siparişiniz alındı!</h3><p style="color:var(--muted);font-size:13px">Masa '+escapeHtml(table)+' için siparişiniz işletmeye iletildi.</p><small style="color:var(--muted)">Sipariş No: '+escapeHtml(ref.id.slice(-7).toUpperCase())+'</small></div>';document.getElementById('cartTotal').textContent='0,00 ₺';setTimeout(closeCart,4500);}catch(e){console.error('Sipariş gönderilemedi',e);err.textContent='Sipariş iletilemedi. İnternet bağlantınızı kontrol edip tekrar deneyin.';}finally{btn.disabled=false;btn.textContent='Siparişi Gönder →';}}
+async function submitOrder(){
+ const c=getCart(),table=document.getElementById('orderTable').value.trim(),err=document.getElementById('cartError'),btn=document.getElementById('submitOrderBtn');err.textContent='';
+ if(!c.length){err.textContent='Sepetiniz boş.';return;}if(!table){err.textContent='Lütfen masa numaranızı girin.';return;}if(!window.__fb){err.textContent='Sunucu bağlantısı henüz hazır değil.';return;}
+ const items=c.map(x=>({productId:String(x.id),quantity:Math.max(1,Math.min(99,Number(x.qty)||1))}));
+ btn.disabled=true;btn.textContent='Gönderiliyor…';
+ try{
+   const {createOrder}=window.__fb;
+   const result=await createOrder({table,items,coupon:(activeCoupon?.code||'').toUpperCase(),note:document.getElementById('orderNote').value.trim()});
+   const orderId=result.data.orderId;const finalTotal=Number(result.data.total)||0;
+   saveCart([]);if(finalTotal>=100){const pts=Math.floor(finalTotal/100);localStorage.setItem('kaptanKoskuLoyaltyPoints',String((Number(localStorage.getItem('kaptanKoskuLoyaltyPoints'))||0)+pts));renderLoyalty();}
+   activeCoupon=null;document.getElementById('orderCoupon').value='';document.getElementById('couponMessage').textContent='';document.getElementById('orderNote').value='';renderCart();
+   document.getElementById('cartItems').innerHTML='<div style="text-align:center;padding:28px 8px"><div style="font-size:42px">✅</div><h3 style="color:var(--gold2)">Siparişiniz alındı!</h3><p style="color:var(--muted);font-size:13px">Masa '+escapeHtml(table)+' için siparişiniz işletmeye iletildi.</p><small style="color:var(--muted)">Sipariş No: '+escapeHtml(String(orderId).slice(-7).toUpperCase())+'</small></div>';
+   document.getElementById('cartTotal').textContent='0,00 ₺';setTimeout(closeCart,4500);
+ }catch(e){console.error('Sipariş gönderilemedi',e);err.textContent=e?.message?.includes('functions/')?'Sipariş doğrulanamadı: '+e.message:'Sipariş iletilemedi. Bağlantınızı kontrol edip tekrar deneyin.';}
+ finally{btn.disabled=false;btn.textContent='Siparişi Gönder →';}
+}
 
 // ===== ADMIN: GELEN SİPARİŞLER =====
 let orderUnsub=null,orderFirstSnapshot=true,orders=[];
@@ -3900,24 +3846,9 @@ async function initCloudSync(){
     const metaRef = doc(db,'settings','meta');
     const metaSnap = await getDoc(metaRef);
     if(!metaSnap.exists()){
-      // İlk kurulum: bu cihazdaki mevcut verileri buluta taşı (bir defalık göç)
-      const batch = writeBatch(db);
-      const localProducts = JSON.parse(localStorage.getItem('kaptanKoskuProducts') || '[]');
-      localProducts.forEach(p=>{
-        batch.set(doc(db,'products',String(p.id)), {
-          category:p.category||'', name:p.name||'', desc:p.desc||'', price:String(p.price||''), discountPrice:p.discountPrice||'', badge:p.badge||'', tags:p.tags||[], order:p.order||0, image:p.image||''
-        });
-      });
-      batch.set(doc(db,'settings','categories'), { list: getCategories() });
-      batch.set(doc(db,'settings','announcement'), getAnnouncementData());
-      batch.set(doc(db,'settings','social'), getSocialLinks());
-      batch.set(doc(db,'settings','calendar'), getCalendarData());
-      batch.set(doc(db,'settings','auth'), { passwordHash: await getAdminPasswordHash() });
-      batch.set(doc(db,'settings','timedAnnouncements'), { list: getTimedAnnouncements() });
-      batch.set(doc(db,'settings','theme'), getThemeData());
-      batch.set(doc(db,'settings','liveMusicMenu'), getMusicMenuData());
-      batch.set(metaRef, { migrated:true, migratedAt: Date.now() });
-      await batch.commit();
+      setCloudStatusUI('offline');
+      console.info('İlk veri aktarımı yönetici girişi sonrasında güvenli migration fonksiyonu ile yapılacak.');
+      return;
     }
   }catch(e){
     console.warn('İlk bulut senkronizasyonu yapılamadı:', e);
@@ -3969,12 +3900,6 @@ async function initCloudSync(){
     renderCalendar();
     if(typeof renderCalendarManager==='function' && document.getElementById('calendarManagerGrid')) renderCalendarManager();
   }, err=>console.warn('Takvim senkronizasyon hatası:', err));
-
-  onSnapshot(doc(db,'settings','auth'), snap=>{
-    if(!snap.exists()) return;
-    const hash = snap.data().passwordHash;
-    if(hash) localStorage.setItem(ADMIN_PASSWORD_KEY, hash);
-  }, err=>console.warn('Şifre senkronizasyon hatası:', err));
 
   onSnapshot(doc(db,'settings','timedAnnouncements'), snap=>{
     if(!snap.exists()) return;
