@@ -1084,9 +1084,9 @@ body.hide-waiter .waiter-btn{display:none!important}
   <div class="login-box" id="loginBox">
     <div class="logo" style="width:56px;height:56px;margin:0 auto 12px;border:1px solid rgba(215,173,91,.6);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--gold2);font-size:24px;font-family:Georgia,serif;background:linear-gradient(160deg,#161613,#0d0d0e);box-shadow:0 0 30px rgba(215,173,91,.16),inset 0 0 15px rgba(215,173,91,.08);">K</div>
     <h2>Yönetim Paneli</h2>
-    <p>Kullanıcı adınız ve 6 haneli personel PIN kodunuzla giriş yapın</p>
-    <input type="text" id="adminUsername" placeholder="Kullanıcı adı" autocomplete="username" maxlength="32" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:14px;outline:none;text-align:left;letter-spacing:0;margin-bottom:9px" onkeydown="if(event.key==='Enter')checkAdminPassword()" autofocus>
-    <input type="password" id="adminPassword" placeholder="6 haneli PIN" inputmode="numeric" autocomplete="current-password" maxlength="6" pattern="[0-9]{6}" onkeydown="if(event.key==='Enter')checkAdminPassword()">
+    <p>Yönetici e-posta adresiniz ve şifrenizle giriş yapın</p>
+    <input type="email" id="adminUsername" placeholder="E-posta adresi" autocomplete="username" maxlength="120" style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:#0e0e0f;color:var(--text);font-size:14px;outline:none;text-align:left;letter-spacing:0;margin-bottom:9px" onkeydown="if(event.key==='Enter')checkAdminPassword()" autofocus>
+    <input type="password" id="adminPassword" placeholder="Şifre" autocomplete="current-password" maxlength="128" onkeydown="if(event.key==='Enter')checkAdminPassword()">
     <div class="login-error" id="loginError"></div>
     <div class="login-actions">
       <button class="btn btn-back" onclick="goBackFromLogin()">← Geri Dön</button>
@@ -1725,7 +1725,7 @@ body.hide-waiter .waiter-btn{display:none!important}
     collection, getDocs, onSnapshot, writeBatch, increment,
     addDoc, query, orderBy, limit
   } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-  import { getAuth, signInWithCustomToken, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+  import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
   import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-functions.js";
 
   const firebaseConfig = {
@@ -1741,7 +1741,7 @@ body.hide-waiter .waiter-btn{display:none!important}
   const db = getFirestore(app);
   const auth = getAuth(app);
   const functions = getFunctions(app, 'europe-west1');
-  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit, auth, signInWithCustomToken, signOut, onAuthStateChanged, staffLogin: httpsCallable(functions, 'staffLogin'), manageStaff: httpsCallable(functions, 'manageStaff'), listStaff: httpsCallable(functions, 'listStaff'), createOrder: httpsCallable(functions, 'createOrder'), migrateLegacyData: httpsCallable(functions, 'migrateLegacyData') };
+  window.__fb = { db, doc, getDoc, setDoc, deleteDoc, collection, getDocs, onSnapshot, writeBatch, increment, addDoc, query, orderBy, limit, auth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createOrder: httpsCallable(functions, 'createOrder') };
   window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <script>
@@ -2466,7 +2466,7 @@ let currentStaffUsername = null;
 let loginSource = null;
 function applyStaffPermissions(){
   const role=currentStaffRole||'kitchen';
-  const allowed=role==='admin'?['products','categories','design','push','musicmenu','orders','waiter','kitchen','tables','campaigns','reports','calendar','social','announcement','settings','staff']:
+  const allowed=role==='admin'?['products','categories','design','push','musicmenu','orders','waiter','kitchen','tables','campaigns','reports','calendar','social','announcement','settings']:
     role==='waiter'?['orders','waiter','tables']:['kitchen'];
   document.querySelectorAll('.admin-tab').forEach(t=>{t.style.display=allowed.includes(t.dataset.tab)?'':'none';});
   if(!allowed.includes(currentTab)) switchTab(allowed[0]);
@@ -2475,41 +2475,32 @@ function applyStaffPermissions(){
 }
 async function checkAdminPassword(){
   unlockWaiterAudio();
-  const username=(document.getElementById('adminUsername')?.value||'').trim().toLowerCase();
-  const pin=(document.getElementById('adminPassword')?.value||'').trim();
+  const email=(document.getElementById('adminUsername')?.value||'').trim().toLowerCase();
+  const password=(document.getElementById('adminPassword')?.value||'').trim();
   const error=document.getElementById('loginError');
-  if(!/^[a-z0-9._-]{3,32}$/.test(username)||!/^\d{6}$/.test(pin)){error.textContent='Kullanıcı adınızı ve 6 haneli PIN kodunuzu girin.';return;}
+  if(!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !password){error.textContent='Geçerli e-posta adresinizi ve şifrenizi girin.';return;}
   if(!window.__fb){error.textContent='Firebase bağlantısı hazır değil.';return;}
   const btn=document.querySelector('#loginBox .btn.primary'); if(btn){btn.disabled=true;btn.textContent='Kontrol ediliyor…';}
   try{
-    const {auth,staffLogin,signInWithCustomToken}=window.__fb;
-    const result=await staffLogin({username,pin});
-    await signInWithCustomToken(auth,result.data.token);
-    currentStaffRole=result.data.role; currentStaffUsername=result.data.username;
-    if(currentStaffRole==='admin'){
-      try {
-        const {db,doc,getDoc,migrateLegacyData}=window.__fb;
-        const meta=await getDoc(doc(db,'settings','meta'));
-        if(!meta.exists()){
-          const productsLocal=JSON.parse(localStorage.getItem('kaptanKoskuProducts')||'[]');
-          await migrateLegacyData({products:productsLocal,categories:getCategories(),announcement:getAnnouncementData(),social:getSocialLinks(),calendar:getCalendarData(),timedAnnouncements:getTimedAnnouncements(),theme:getThemeData(),liveMusicMenu:getMusicMenuData()});
-        }
-      }catch(migrationError){console.error('İlk veri aktarımı:',migrationError);throw new Error('İlk veri aktarımı başarısız. Firebase Functions ve yönetici rolünü kontrol edin.');}
-    }
-    if(currentStaffRole==='admin') await initCloudSync();
-    else { cloudReady=false; setCloudStatusUI('online'); }
+    const {auth,signInWithEmailAndPassword}=window.__fb;
+    await signInWithEmailAndPassword(auth,email,password);
+    currentStaffRole='admin'; currentStaffUsername=email;
+    await initCloudSync();
     isAdminLoggedIn=true;
     document.getElementById('adminLogin').style.display='none';
     document.getElementById('admin').style.display='block';
     document.getElementById('home').style.display='none'; document.getElementById('menu').style.display='none';
     const wBtn=document.getElementById('whatsappFloatBtn');if(wBtn)wBtn.style.display='none';
     applyStaffPermissions();
-    if(currentStaffRole==='admin'){populateCategories();renderAdmin();updateStats();loadAnnouncement();renderCalendarManager();loadSocialLinks();renderCategoryManager();renderStaffList();}
+    populateCategories();renderAdmin();updateStats();loadAnnouncement();renderCalendarManager();loadSocialLinks();renderCategoryManager();
     startWaiterListener();startOrderListener();startTableRequestListener();
     document.getElementById('adminPassword').value='';error.textContent='';loginSource=null;
-    switchTab(currentStaffRole==='admin'?'orders':currentStaffRole==='waiter'?'waiter':'kitchen');
-  }catch(e){console.error(e);error.textContent=e?.message&&e.message.length<130?e.message:'Giriş başarısız. Kullanıcı adı veya PIN hatalı ya da hesap kilitli.';}
-  finally{if(btn){btn.disabled=false;btn.textContent='Giriş Yap';}}
+    switchTab('orders');
+  }catch(e){
+    console.error('Yönetici girişi:',e);
+    const code=e?.code||'';
+    error.textContent=code==='auth/invalid-credential'?'E-posta veya şifre hatalı.':code==='auth/unauthorized-domain'?'Bu alan adı Firebase Authentication yetkili alan adlarında değil.':(e?.message||'Giriş başarısız.');
+  }finally{if(btn){btn.disabled=false;btn.textContent='Giriş Yap';}}
 }
 
 
