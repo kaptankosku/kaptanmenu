@@ -937,7 +937,7 @@ body.hide-waiter .waiter-btn{display:none!important}
     await OneSignal.init({
       appId: "dd217ecf-99e5-4f8d-9450-abf67d59afe0",
       safari_web_id: "web.onesignal.auto.47d572d6-ef9d-4d9d-8962-815db43f4beb",
-      serviceWorkerPath: "/kaptanmenu/OneSignalSDKWorker.js",
+      serviceWorkerPath: "/kaptanmenu/sw.js",
       serviceWorkerParam: { scope: "/kaptanmenu/" },
       notifyButton: { enable: true }
     });
@@ -3163,19 +3163,45 @@ function initNotifications(){
     btn.style.display = 'none';
     return;
   }
-  // Daha önce izin verilmemiş/reddedilmemişse (varsayılan durum) butonu göster
-  btn.style.display = (Notification.permission === 'default') ? 'block' : 'none';
-}
-
-function requestNotificationPermission(){
-  if(!('Notification' in window)) return;
-  Notification.requestPermission().then(perm=>{
-    const btn = document.getElementById('notifyPermBtn');
-    if(btn) btn.style.display = 'none';
-    if(perm === 'granted'){
-      showInAppToast('🔔 Bildirimler Açıldı', 'Kampanya ve duyurulardan haberdar olacaksınız.');
+  // OneSignal aboneliği ayrı kontrol edilir; yalnızca tarayıcı iznine bakıp butonu gizlemeyiz.
+  btn.style.display = 'block';
+  window.OneSignalDeferred = window.OneSignalDeferred || [];
+  window.OneSignalDeferred.push(async function(OneSignal) {
+    try {
+      const optedIn = !!OneSignal.User.PushSubscription.optedIn;
+      if (optedIn) btn.style.display = 'none';
+    } catch (e) {
+      console.warn('OneSignal abonelik durumu okunamadı:', e);
     }
   });
+}
+
+async function requestNotificationPermission(){
+  const btn = document.getElementById('notifyPermBtn');
+  if(btn) btn.disabled = true;
+  try {
+    if (!window.OneSignalDeferred) window.OneSignalDeferred = [];
+    await new Promise((resolve, reject) => {
+      window.OneSignalDeferred.push(async function(OneSignal) {
+        try {
+          const granted = await OneSignal.Notifications.requestPermission();
+          if (granted) {
+            await OneSignal.User.PushSubscription.optIn();
+            resolve(true);
+          } else {
+            resolve(false);
+          }
+        } catch (err) { reject(err); }
+      });
+    });
+    if(btn) btn.style.display = 'none';
+    showInAppToast('🔔 Bildirim ayarı', 'İzin durumun OneSignal üzerinden kontrol edildi.');
+  } catch (err) {
+    console.error('OneSignal izin/abonelik hatası:', err);
+    alert('Bildirim aboneliği başlatılamadı. Uygulamayı ana ekrandaki simgesinden açıp tekrar deneyin.');
+  } finally {
+    if(btn) btn.disabled = false;
+  }
 }
 
 function showInAppToast(title, body){

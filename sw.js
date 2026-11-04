@@ -1,3 +1,7 @@
+// OneSignal SDK and Kaptan Köşkü PWA share the same service worker scope.
+// Keep this import at the very top.
+importScripts("https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js");
+
 // Kaptan Köşkü - Service Worker
 const CACHE_NAME = 'kaptan-kosku-v1';
 const APP_SHELL = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
